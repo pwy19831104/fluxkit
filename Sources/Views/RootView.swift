@@ -23,9 +23,9 @@ struct RootView: View {
 
     private var activeCount: Int { library.active.count }
 
-    /// `downloadkit://open?url=<percent-encoded link>`
+    /// `streamkit://open?url=<percent-encoded link>`
     static func incomingLink(from url: URL) -> String? {
-        guard url.scheme?.lowercased() == "downloadkit" else { return nil }
+        guard url.scheme?.lowercased() == "streamkit" else { return nil }
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         guard let value = items.first(where: { $0.name == "url" })?.value,
               !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }

@@ -62,13 +62,13 @@ final class ShareViewController: UIViewController {
         titleLabel.numberOfLines = 2
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        detailLabel.text = "DownloadKit will start the download when you open the app."
+        detailLabel.text = "StreamKit will start the download when you open the app."
         detailLabel.font = .systemFont(ofSize: 13.5, weight: .regular)
         detailLabel.textColor = UIColor(white: 0.68, alpha: 1)
         detailLabel.numberOfLines = 3
         detailLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        openButton.setTitle("Open DownloadKit", for: .normal)
+        openButton.setTitle("Open StreamKit", for: .normal)
         openButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         openButton.setTitleColor(.black, for: .normal)
         openButton.backgroundColor = accent
@@ -127,7 +127,7 @@ final class ShareViewController: UIViewController {
         spinner.stopAnimating()
         titleLabel.text = "Link saved"
         let host = URL(string: link)?.host?.replacingOccurrences(of: "www.", with: "") ?? link
-        detailLabel.text = "\(host)\nOpen DownloadKit to start the download."
+        detailLabel.text = "\(host)\nOpen StreamKit to start the download."
         openButton.isHidden = false
         doneButton.isHidden = false
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -136,18 +136,18 @@ final class ShareViewController: UIViewController {
     private func showFailure() {
         spinner.stopAnimating()
         titleLabel.text = "No link found"
-        detailLabel.text = "Share a video link, or paste it directly in DownloadKit."
+        detailLabel.text = "Share a video link, or paste it directly in StreamKit."
         doneButton.isHidden = false
     }
 
     // MARK: - Actions
 
     @objc private func openApp() {
-        guard let url = URL(string: "downloadkit://") else { return }
+        guard let url = URL(string: "streamkit://") else { return }
         extensionContext?.open(url) { [weak self] opened in
             DispatchQueue.main.async {
                 if !opened {
-                    self?.detailLabel.text = "Link saved. Open DownloadKit from your Home Screen to start the download."
+                    self?.detailLabel.text = "Link saved. Open StreamKit from your Home Screen to start the download."
                     self?.openButton.isHidden = true
                 } else {
                     self?.extensionContext?.completeRequest(returningItems: nil)

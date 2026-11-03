@@ -13,6 +13,7 @@ xcuserdata/
 # XcodeGen output (project.yml is the source of truth)
 *.xcodeproj
 Sources/Info.plist
+ShareExtension/Info.plist
 
 # Swift Package Manager
 .build/

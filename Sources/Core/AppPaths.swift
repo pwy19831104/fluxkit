@@ -5,7 +5,7 @@ import Foundation
 enum AppPaths {
     static let root: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let root = base.appendingPathComponent("DownloadKit", isDirectory: true)
+        let root = base.appendingPathComponent("StreamKit", isDirectory: true)
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         return root
     }()

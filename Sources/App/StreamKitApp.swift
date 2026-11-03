@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct DownloadKitApp: App {
+struct StreamKitApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     @State private var library = LibraryStore.shared

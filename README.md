@@ -1,4 +1,4 @@
-# DownloadKit
+# StreamKit
 
 A no-account, open-and-use iOS video downloader. Paste a link (or share one from Safari),
 tap **Download**, keep the video offline. Built with SwiftUI, AVFoundation and URLSession —
@@ -25,33 +25,33 @@ zero third-party dependencies.
   extension drops it into an App Group inbox and the app picks it up on next activation.
 - **Play offline.** Built-in `AVPlayer`, share sheet, and *Save to Photos*.
 - **Library.** Local JSON index in Application Support, thumbnails, size/duration, delete, retry.
-- **Deep link.** `downloadkit://open?url=<percent-encoded link>` lets Shortcuts or a
+- **Deep link.** `streamkit://open?url=<percent-encoded link>` lets Shortcuts or a
   share-sheet shortcut hand a URL over without retyping.
 
 ## Requirements
 
 - Xcode 26 or newer, iOS 17+ deployment target
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`) — the project file is generated
-- An App Group named `group.com.downloadkit.app` registered for both bundle ids when you build for a device
+- An App Group named `group.com.streamkit.app` registered for both bundle ids when you build for a device
 
 ## Run it
 
 ```bash
 xcodegen generate
-open DownloadKit.xcodeproj
+open StreamKit.xcodeproj
 ```
 
 Command line:
 
 ```bash
-xcodebuild -project DownloadKit.xcodeproj -scheme DownloadKit \
+xcodebuild -project StreamKit.xcodeproj -scheme StreamKit \
   -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' build
 
-xcodebuild test -project DownloadKit.xcodeproj -scheme DownloadKit \
+xcodebuild test -project StreamKit.xcodeproj -scheme StreamKit \
   -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
-The project has two app targets: `DownloadKit` (the app) and `DownloadKitShare` (share
+The project has two app targets: `StreamKit` (the app) and `StreamKitShare` (share
 extension, embedded in `PlugIns/`).
 
 ## How a link is resolved
@@ -65,7 +65,7 @@ input ──► normalize (https://, validation)
           └─ text/html ──► scrape candidates ──► probe ──► media
 ```
 
-Downloads land in `Application Support/DownloadKit/Media`, thumbnails next to them in
+Downloads land in `Application Support/StreamKit/Media`, thumbnails next to them in
 `…/Thumbnails`, pending resume data as `…/Media/<record-id>.resume`, and the index in
 `…/library.json`.
 
@@ -104,17 +104,17 @@ project.yml   XcodeGen spec (Info.plists + entitlements are generated from it)
 ```bash
 # Resolve + download a list of links, logging outcomes to the unified log
 SIMCTL_CHILD_SMOKE_URLS="https://example.com/a.mp4" \
-  xcrun simctl launch --console booted com.downloadkit.app --smoke-test
+  xcrun simctl launch --console booted com.streamkit.app --smoke-test
 
 # Same, but pause after 3 s and resume 1.5 s later (exercises resume data)
 SIMCTL_CHILD_SMOKE_PAUSE=1 SIMCTL_CHILD_SMOKE_URLS="…" \
-  xcrun simctl launch booted com.downloadkit.app --smoke-test
+  xcrun simctl launch booted com.streamkit.app --smoke-test
 
 # Simulate the share extension writing into the App Group
-SIMCTL_CHILD_INBOX_PUSH="https://example.com/page" xcrun simctl launch booted com.downloadkit.app
+SIMCTL_CHILD_INBOX_PUSH="https://example.com/page" xcrun simctl launch booted com.streamkit.app
 
 # Pre-fill the field and open the preview sheet / start on a tab
-SIMCTL_CHILD_PREVIEW_URL="…" SIMCTL_CHILD_SHOW_TAB=library xcrun simctl launch booted com.downloadkit.app
+SIMCTL_CHILD_PREVIEW_URL="…" SIMCTL_CHILD_SHOW_TAB=library xcrun simctl launch booted com.streamkit.app
 ```
 
 ## Scope and limitations
@@ -128,12 +128,12 @@ SIMCTL_CHILD_PREVIEW_URL="…" SIMCTL_CHILD_SHOW_TAB=library xcrun simctl launch
   falls back gracefully; verify remuxing on a physical device.
 - Subtitle renditions are ignored; audio is muxed from the default rendition only.
 - The share extension can't launch the app itself in most iOS versions; it saves the link and
-  shows "Open DownloadKit", which drains the inbox on activation.
+  shows "Open StreamKit", which drains the inbox on activation.
 
 ## Before shipping to the App Store
 
-- Replace `com.downloadkit.app` / `com.downloadkit.app.share` with your own ids, set a
-  development team, and register `group.com.downloadkit.app` in the developer portal for both.
+- Replace `com.streamkit.app` / `com.streamkit.app.share` with your own ids, set a
+  development team, and register `group.com.streamkit.app` in the developer portal for both.
 - App icon lives in `Sources/Resources/Assets.xcassets/AppIcon.appiconset` — regenerate with your brand.
 - `NSAllowsArbitraryLoads` is enabled because users can supply `http://` media. Explain this in
   App Review notes; alternatively restrict to `NSAllowsArbitraryLoadsForMedia`.

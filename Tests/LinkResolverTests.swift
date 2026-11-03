@@ -1,5 +1,5 @@
 import XCTest
-@testable import DownloadKit
+@testable import StreamKit
 
 final class LinkResolverTests: XCTestCase {
 
@@ -172,7 +172,7 @@ final class HLSPlaylistTests: XCTestCase {
 final class DeepLinkTests: XCTestCase {
 
     func testParsesEncodedLinkFromScheme() {
-        let url = URL(string: "downloadkit://open?url=https%3A%2F%2Fcdn.example.com%2Fclip.mp4")!
+        let url = URL(string: "streamkit://open?url=https%3A%2F%2Fcdn.example.com%2Fclip.mp4")!
         XCTAssertEqual(RootView.incomingLink(from: url), "https://cdn.example.com/clip.mp4")
     }
 
@@ -181,7 +181,7 @@ final class DeepLinkTests: XCTestCase {
     }
 
     func testIgnoresEmptyPayload() {
-        XCTAssertNil(RootView.incomingLink(from: URL(string: "downloadkit://open?url=")!))
-        XCTAssertNil(RootView.incomingLink(from: URL(string: "downloadkit://open")!))
+        XCTAssertNil(RootView.incomingLink(from: URL(string: "streamkit://open?url=")!))
+        XCTAssertNil(RootView.incomingLink(from: URL(string: "streamkit://open")!))
     }
 }

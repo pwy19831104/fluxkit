@@ -3,7 +3,7 @@ import Foundation
 /// Bridges the background-session completion handler delivered to the app delegate
 /// over to the `URLSession` delegate, which is the only place iOS allows it to be called.
 enum BackgroundSessionBridge {
-    static let identifier = "com.downloadkit.app.background"
+    static let identifier = "com.streamkit.app.background"
 
     private static let lock = NSLock()
     private static var storedHandler: (() -> Void)?

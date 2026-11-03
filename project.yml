@@ -1,6 +1,6 @@
-name: DownloadKit
+name: StreamKit
 options:
-  bundleIdPrefix: com.downloadkit
+  bundleIdPrefix: com.streamkit
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
@@ -16,32 +16,32 @@ settings:
     SWIFT_EMIT_LOC_STRINGS: YES
 
 targets:
-  DownloadKit:
+  StreamKit:
     type: application
     platform: iOS
     sources:
       - path: Sources
       - path: Shared
     dependencies:
-      - target: DownloadKitShare
+      - target: StreamKitShare
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.downloadkit.app
-        PRODUCT_NAME: DownloadKit
+        PRODUCT_BUNDLE_IDENTIFIER: com.streamkit.app
+        PRODUCT_NAME: StreamKit
         TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
-        INFOPLIST_KEY_CFBundleDisplayName: DownloadKit
+        INFOPLIST_KEY_CFBundleDisplayName: StreamKit
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
     entitlements:
-      path: Sources/DownloadKit.entitlements
+      path: Sources/StreamKit.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.com.downloadkit.app
+          - group.com.streamkit.app
     info:
       path: Sources/Info.plist
       properties:
-        CFBundleDisplayName: DownloadKit
+        CFBundleDisplayName: StreamKit
         UILaunchScreen:
           UIColorName: ""
         UISupportedInterfaceOrientations:
@@ -51,21 +51,21 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        NSPhotoLibraryAddUsageDescription: "DownloadKit saves videos to your photo library only when you tap Save to Photos."
-        NSPhotoLibraryUsageDescription: "DownloadKit needs access to save downloaded videos to your photo library."
+        NSPhotoLibraryAddUsageDescription: "StreamKit saves videos to your photo library only when you tap Save to Photos."
+        NSPhotoLibraryUsageDescription: "StreamKit needs access to save downloaded videos to your photo library."
         CFBundleURLTypes:
-          - CFBundleURLName: com.downloadkit.app.link
+          - CFBundleURLName: com.streamkit.app.link
             CFBundleURLSchemes:
-              - downloadkit
+              - streamkit
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         ITSAppUsesNonExemptEncryption: false
     scheme:
       testTargets:
-        - DownloadKitTests
+        - StreamKitTests
       gatherCoverageData: true
 
-  DownloadKitShare:
+  StreamKitShare:
     type: app-extension
     platform: iOS
     sources:
@@ -73,8 +73,8 @@ targets:
       - path: Shared
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.downloadkit.app.share
-        PRODUCT_NAME: DownloadKitShare
+        PRODUCT_BUNDLE_IDENTIFIER: com.streamkit.app.share
+        PRODUCT_NAME: StreamKitShare
         SKIP_INSTALL: YES
         APPLICATION_EXTENSION_API_ONLY: YES
         TARGETED_DEVICE_FAMILY: "1,2"
@@ -85,11 +85,11 @@ targets:
       path: ShareExtension/ShareExtension.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.com.downloadkit.app
+          - group.com.streamkit.app
     info:
       path: ShareExtension/Info.plist
       properties:
-        CFBundleDisplayName: DownloadKit
+        CFBundleDisplayName: StreamKit
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
@@ -99,16 +99,16 @@ targets:
               NSExtensionActivationSupportsWebPageWithMaxCount: 1
               NSExtensionActivationSupportsText: true
 
-  DownloadKitTests:
+  StreamKitTests:
     type: bundle.unit-test
     platform: iOS
     sources:
       - path: Tests
     dependencies:
-      - target: DownloadKit
+      - target: StreamKit
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.downloadkit.app.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.streamkit.app.tests
         GENERATE_INFOPLIST_FILE: YES
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/DownloadKit.app/DownloadKit"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/StreamKit.app/StreamKit"
         BUNDLE_LOADER: "$(TEST_HOST)"

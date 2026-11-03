@@ -36,7 +36,7 @@ struct PlayerScreen: View {
             .padding(.top, 8)
         }
         .statusBarHidden()
-        .alert("DownloadKit", isPresented: Binding(get: { alertMessage != nil },
+        .alert("StreamKit", isPresented: Binding(get: { alertMessage != nil },
                                                   set: { if !$0 { alertMessage = nil } })) {
             Button("OK", role: .cancel) { alertMessage = nil }
         } message: {

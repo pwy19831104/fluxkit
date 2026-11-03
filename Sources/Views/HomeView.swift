@@ -65,7 +65,7 @@ struct HomeView: View {
                 Image(systemName: "arrow.down.circle.fill")
                     .font(.system(size: 34, weight: .semibold))
                     .foregroundStyle(Theme.brandGradient)
-                Text("DownloadKit")
+                Text("StreamKit")
                     .font(.system(size: 32, weight: .bold, design: .rounded))
                     .foregroundStyle(Theme.textPrimary)
             }
@@ -225,7 +225,7 @@ struct HomeView: View {
 
             VStack(spacing: 10) {
                 step(number: "1", title: "Copy a video link", detail: "From Safari, Files, or any app.")
-                step(number: "2", title: "Tap Download", detail: "DownloadKit inspects the link and finds the media.")
+                step(number: "2", title: "Tap Download", detail: "StreamKit inspects the link and finds the media.")
                 step(number: "3", title: "Keep it offline", detail: "Play it in the app or save it to Photos.")
             }
         }
@@ -242,7 +242,7 @@ struct HomeView: View {
     }
 
     private var legalNote: some View {
-        Text("Only download videos you have permission to save. DownloadKit doesn't bypass DRM or paid access.")
+        Text("Only download videos you have permission to save. StreamKit doesn't bypass DRM or paid access.")
             .font(.system(size: 11))
             .foregroundStyle(Theme.textSecondary.opacity(0.75))
             .multilineTextAlignment(.center)
