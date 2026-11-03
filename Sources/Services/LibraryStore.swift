@@ -6,12 +6,13 @@ import Observation
 @Observable
 final class LibraryStore {
 
+    static let shared = LibraryStore()
+
     private(set) var records: [DownloadRecord] = []
     private var saveTask: Task<Void, Never>?
 
-    init() {
+    private init() {
         load()
-        markAllActiveAsInterrupted()
     }
 
     // MARK: - Queries
@@ -77,14 +78,6 @@ final class LibraryStore {
             try? FileManager.default.removeItem(at: AppPaths.thumbnailURL(fileName: name))
         }
         records.removeAll { $0.id == id }
-        scheduleSave()
-    }
-
-    func markAllActiveAsInterrupted() {
-        for index in records.indices where records[index].isActive {
-            records[index].state = .failed
-            records[index].errorMessage = "Interrupted. Tap retry to download again."
-        }
         scheduleSave()
     }
 

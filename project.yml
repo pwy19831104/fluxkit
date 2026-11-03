@@ -21,6 +21,9 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+      - path: Shared
+    dependencies:
+      - target: DownloadKitShare
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.downloadkit.app
@@ -30,6 +33,11 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: DownloadKit
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    entitlements:
+      path: Sources/DownloadKit.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.downloadkit.app
     info:
       path: Sources/Info.plist
       properties:
@@ -56,6 +64,40 @@ targets:
       testTargets:
         - DownloadKitTests
       gatherCoverageData: true
+
+  DownloadKitShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.downloadkit.app.share
+        PRODUCT_NAME: DownloadKitShare
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+      configs:
+        Release:
+          SWIFT_COMPILATION_MODE: wholemodule
+    entitlements:
+      path: ShareExtension/ShareExtension.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.downloadkit.app
+    info:
+      path: ShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: DownloadKit
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsWebPageWithMaxCount: 1
+              NSExtensionActivationSupportsText: true
 
   DownloadKitTests:
     type: bundle.unit-test

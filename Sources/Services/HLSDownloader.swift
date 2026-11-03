@@ -375,16 +375,18 @@ struct HLSDownloader: Sendable {
                     try? FileManager.default.removeItem(at: destination)
                 }
             } else {
+                let exportSession = SendableExportSession(exporter)
                 exporter.outputURL = destination
                 exporter.outputFileType = .mp4
                 exporter.shouldOptimizeForNetworkUse = true
                 do {
                     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                         exporter.exportAsynchronously {
-                            if exporter.status == .completed {
+                            let finished = exportSession.session
+                            if finished.status == .completed {
                                 continuation.resume()
                             } else {
-                                continuation.resume(throwing: exporter.error ?? HLSError.unsupported("export"))
+                                continuation.resume(throwing: finished.error ?? HLSError.unsupported("export"))
                             }
                         }
                     }
@@ -470,6 +472,13 @@ struct HLSDownloader: Sendable {
         }
         return result
     }
+}
+
+/// `AVAssetExportSession`'s legacy completion API is `@Sendable` but the object isn't
+/// marked `Sendable`; this box keeps the compiler (and Swift 6 mode) happy.
+private struct SendableExportSession: @unchecked Sendable {
+    let session: AVAssetExportSession
+    init(_ session: AVAssetExportSession) { self.session = session }
 }
 
 extension Data {

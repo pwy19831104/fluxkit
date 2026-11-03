@@ -2,8 +2,10 @@ import SwiftUI
 
 @main
 struct DownloadKitApp: App {
-    @State private var library = LibraryStore()
-    @State private var downloads = DownloadManager()
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
+    @State private var library = LibraryStore.shared
+    @State private var downloads = DownloadManager.shared
 
     var body: some Scene {
         WindowGroup {
@@ -11,12 +13,16 @@ struct DownloadKitApp: App {
                 .environment(library)
                 .environment(downloads)
                 .preferredColorScheme(.dark)
+                #if DEBUG
                 .task {
-                    downloads.attach(library: library)
-                    #if DEBUG
+                    // Simulates the share extension writing into the App Group.
+                    if let link = ProcessInfo.processInfo.environment["INBOX_PUSH"] {
+                        SharedInbox.push(link)
+                        NSLog("INBOX: pushed \(link) (pending=\(SharedInbox.pendingCount))")
+                    }
                     SmokeTest.runIfRequested(library: library, downloads: downloads)
-                    #endif
                 }
+                #endif
         }
     }
 }

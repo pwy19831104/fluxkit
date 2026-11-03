@@ -2,7 +2,6 @@ import SwiftUI
 
 struct LibraryView: View {
     @Environment(LibraryStore.self) private var library
-    @Environment(DownloadManager.self) private var downloads
 
     @State private var playing: DownloadRecord?
     @State private var pendingDelete: DownloadRecord?

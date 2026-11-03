@@ -5,7 +5,6 @@ struct HomeView: View {
     @Binding var pendingLink: String?
 
     @Environment(LibraryStore.self) private var library
-    @Environment(DownloadManager.self) private var downloads
 
     @State private var link = ""
     @State private var isResolving = false

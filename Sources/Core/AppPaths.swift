@@ -31,5 +31,6 @@ enum AppPaths {
     static var stateFile: URL { root.appendingPathComponent("library.json") }
 
     static func mediaURL(fileName: String) -> URL { downloads.appendingPathComponent(fileName) }
+    static func resumeDataURL(recordID: UUID) -> URL { downloads.appendingPathComponent("\(recordID.uuidString).resume") }
     static func thumbnailURL(fileName: String) -> URL { thumbnails.appendingPathComponent(fileName) }
 }

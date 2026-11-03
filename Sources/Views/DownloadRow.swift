@@ -150,13 +150,34 @@ struct DownloadRow: View {
     @ViewBuilder
     private var trailingControl: some View {
         switch record.state {
-        case .running, .queued, .paused:
+        case .running, .queued:
+            HStack(spacing: 12) {
+                if record.state == .running, record.kind == .progressive {
+                    Button {
+                        downloads.pause(record.id)
+                    } label: {
+                        Image(systemName: "pause.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Button {
+                    downloads.cancel(record.id)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                .buttonStyle(.plain)
+            }
+        case .paused:
             Button {
-                downloads.cancel(record.id)
+                downloads.resume(record)
             } label: {
-                Image(systemName: "xmark.circle.fill")
+                Image(systemName: "play.circle.fill")
                     .font(.system(size: 20))
-                    .foregroundStyle(Theme.textSecondary)
+                    .foregroundStyle(Theme.accent)
             }
             .buttonStyle(.plain)
         case .failed, .cancelled:

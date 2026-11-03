@@ -1,7 +1,8 @@
 # DownloadKit
 
-A no-account, open-and-use iOS video downloader. Paste a link, tap **Download**, keep the
-video offline. Built with SwiftUI, AVFoundation and URLSession — zero third-party dependencies.
+A no-account, open-and-use iOS video downloader. Paste a link (or share one from Safari),
+tap **Download**, keep the video offline. Built with SwiftUI, AVFoundation and URLSession —
+zero third-party dependencies.
 
 <p align="center">
   <img src="docs/screenshots/home.png" width="260" alt="Home screen">
@@ -16,6 +17,12 @@ video offline. Built with SwiftUI, AVFoundation and URLSession — zero third-pa
 - **HLS pipeline.** Master playlist → best variant → parallel segment download (6 at a time) →
   AES-128 segment decryption → fMP4 passthrough or MPEG-TS remux to `.mp4`. Separate audio
   renditions are muxed back with `AVMutableComposition`.
+- **Downloads survive the app.** Progressive transfers run on a background `URLSession`, so they
+  keep going while the app is suspended or terminated, and are re-matched after a relaunch via
+  `taskDescription`. Pause/resume uses the system's resume data, so a paused transfer continues
+  from the byte it stopped at.
+- **Share sheet.** Share any link from Safari/YouTube-free sources straight into the app; the
+  extension drops it into an App Group inbox and the app picks it up on next activation.
 - **Play offline.** Built-in `AVPlayer`, share sheet, and *Save to Photos*.
 - **Library.** Local JSON index in Application Support, thumbnails, size/duration, delete, retry.
 - **Deep link.** `downloadkit://open?url=<percent-encoded link>` lets Shortcuts or a
@@ -25,6 +32,7 @@ video offline. Built with SwiftUI, AVFoundation and URLSession — zero third-pa
 
 - Xcode 26 or newer, iOS 17+ deployment target
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`) — the project file is generated
+- An App Group named `group.com.downloadkit.app` registered for both bundle ids when you build for a device
 
 ## Run it
 
@@ -43,6 +51,9 @@ xcodebuild test -project DownloadKit.xcodeproj -scheme DownloadKit \
   -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
+The project has two app targets: `DownloadKit` (the app) and `DownloadKitShare` (share
+extension, embedded in `PlugIns/`).
+
 ## How a link is resolved
 
 ```
@@ -55,19 +66,37 @@ input ──► normalize (https://, validation)
 ```
 
 Downloads land in `Application Support/DownloadKit/Media`, thumbnails next to them in
-`…/Thumbnails`, and the index in `…/library.json`.
+`…/Thumbnails`, pending resume data as `…/Media/<record-id>.resume`, and the index in
+`…/library.json`.
+
+## Lifecycle notes
+
+- **Progressive downloads** use `URLSessionConfiguration.background(withIdentifier:)` with
+  `sessionSendsLaunchEvents`. `AppDelegate` forwards
+  `handleEventsForBackgroundURLSession` to `BackgroundSessionBridge`, and
+  `urlSessionDidFinishEvents(forBackgroundURLSession:)` calls it back — otherwise iOS kills the
+  app for stalling background work.
+- **Relaunch reconciliation:** `DownloadManager.reconcileWithSystem()` asks the system for live
+  tasks and marks anything still "running" in the index as paused (resume data present) or
+  interrupted (no data). Task identity travels in `taskDescription` (`<uuid>|<ext>`), because
+  `taskIdentifier`s are not stable across launches.
+- **HLS downloads** are orchestrated in-process (parallel segments + remux), so they pause when
+  the app is suspended. Resume data doesn't apply to them.
 
 ## Layout
 
 ```
 Sources/
-  App/        entry point
+  App/        entry point + app delegate (background session events)
   Core/       models + on-disk paths
   Services/   LinkResolver, DownloadManager, HLSDownloader, LibraryStore, thumbnails, Photos
   Views/      Home, Downloads, Library, Player, preview sheet, theme
   Debug/      DEBUG-only smoke test harness
+Shared/       SharedInbox (App Group mailbox, compiled into app + extension)
+ShareExtension/
+              ShareViewController (share sheet UI + link extraction)
 Tests/        resolver, model, HLS and deep-link unit tests
-project.yml   XcodeGen spec (Info.plist is generated from it)
+project.yml   XcodeGen spec (Info.plists + entitlements are generated from it)
 ```
 
 ## Debug hooks (DEBUG builds only)
@@ -77,11 +106,15 @@ project.yml   XcodeGen spec (Info.plist is generated from it)
 SIMCTL_CHILD_SMOKE_URLS="https://example.com/a.mp4" \
   xcrun simctl launch --console booted com.downloadkit.app --smoke-test
 
-# Pre-fill the field and open the preview sheet
-SIMCTL_CHILD_PREVIEW_URL="https://example.com/page" xcrun simctl launch booted com.downloadkit.app
+# Same, but pause after 3 s and resume 1.5 s later (exercises resume data)
+SIMCTL_CHILD_SMOKE_PAUSE=1 SIMCTL_CHILD_SMOKE_URLS="…" \
+  xcrun simctl launch booted com.downloadkit.app --smoke-test
 
-# Start on a specific tab
-SIMCTL_CHILD_SHOW_TAB=library xcrun simctl launch booted com.downloadkit.app
+# Simulate the share extension writing into the App Group
+SIMCTL_CHILD_INBOX_PUSH="https://example.com/page" xcrun simctl launch booted com.downloadkit.app
+
+# Pre-fill the field and open the preview sheet / start on a tab
+SIMCTL_CHILD_PREVIEW_URL="…" SIMCTL_CHILD_SHOW_TAB=library xcrun simctl launch booted com.downloadkit.app
 ```
 
 ## Scope and limitations
@@ -93,14 +126,14 @@ SIMCTL_CHILD_SHOW_TAB=library xcrun simctl launch booted com.downloadkit.app
 - **Simulator quirk:** `AVAssetExportSession` fails on the simulator (`AVFoundationErrorDomain -11800`).
   The concatenated stream is still saved (`.mp4` for fMP4, `.ts` for legacy TS) and the app
   falls back gracefully; verify remuxing on a physical device.
-- Downloads use a foreground `URLSession`; long transfers pause when the app is suspended.
-  Switch to a background session (with `handleEventsForBackgroundURLSession`) for background transfers.
-- No resume support yet — a failed download restarts from zero.
 - Subtitle renditions are ignored; audio is muxed from the default rendition only.
+- The share extension can't launch the app itself in most iOS versions; it saves the link and
+  shows "Open DownloadKit", which drains the inbox on activation.
 
 ## Before shipping to the App Store
 
-- Replace `com.downloadkit.app` with your own bundle id and set a development team.
+- Replace `com.downloadkit.app` / `com.downloadkit.app.share` with your own ids, set a
+  development team, and register `group.com.downloadkit.app` in the developer portal for both.
 - App icon lives in `Sources/Resources/Assets.xcassets/AppIcon.appiconset` — regenerate with your brand.
 - `NSAllowsArbitraryLoads` is enabled because users can supply `http://` media. Explain this in
   App Review notes; alternatively restrict to `NSAllowsArbitraryLoadsForMedia`.

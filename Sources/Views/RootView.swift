@@ -2,6 +2,8 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(LibraryStore.self) private var library
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var selection: Tab = RootView.initialTab
     @State private var pendingLink: String?
 
@@ -30,6 +32,18 @@ struct RootView: View {
         return value
     }
 
+    /// Links handed over by the share extension (`SharedInbox`) take priority over nothing:
+    /// we only consume one at a time so the user can review each preview.
+    private func drainSharedInbox() {
+        guard pendingLink == nil else { return }
+        #if DEBUG
+        NSLog("INBOX: available=\(SharedInbox.isAvailable) defaults=\(SharedInbox.defaults != nil) pending=\(SharedInbox.pendingCount)")
+        #endif
+        guard let link = SharedInbox.popNewest() else { return }
+        selection = .home
+        pendingLink = link
+    }
+
     var body: some View {
         TabView(selection: $selection) {
             HomeView(pendingLink: $pendingLink)
@@ -50,6 +64,10 @@ struct RootView: View {
             guard let link = Self.incomingLink(from: url) else { return }
             selection = .home
             pendingLink = link
+        }
+        .onAppear(perform: drainSharedInbox)
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { drainSharedInbox() }
         }
         .onAppear {
             let appearance = UITabBarAppearance()
