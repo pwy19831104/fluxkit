@@ -2,7 +2,7 @@
 
 **Last updated: 4 November 2026**
 
-FluxKit is an offline media saver for iPhone. It downloads HLS playlists, direct media
+FluxKit is an offline media saver for iPhone and iPad. It downloads HLS playlists, direct media
 links, podcast feeds, and files you import, so you can watch or listen offline. This policy
 explains what data is involved. The short version: your files and links stay on your device;
 we do not run an account system or analytics, and the only third-party service is RevenueCat
