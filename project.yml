@@ -76,8 +76,32 @@ targets:
           - CFBundleURLName: cloud.fluxkit.app.link
             CFBundleURLSchemes:
               - fluxkit
+        # ATS: users may paste `http://` media, and several supported CDNs answer over plaintext
+        # only. The blanket switch stays on for that reason (and is declared in the review notes),
+        # but the hosts we know about are listed explicitly so the app keeps working if the blanket
+        # switch is ever turned off, and so a future reader can see what actually needs plaintext.
+        # `LinkResolver.upgradedToHTTPS` already retries every http URL over TLS first.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+          NSExceptionDomains:
+            itc.cn:
+              NSIncludesSubdomains: true
+              NSExceptionAllowsInsecureHTTPLoads: true
+            bdstatic.com:
+              NSIncludesSubdomains: true
+              NSExceptionAllowsInsecureHTTPLoads: true
+            sohucs.com:
+              NSIncludesSubdomains: true
+              NSExceptionAllowsInsecureHTTPLoads: true
+            letvcdn.com:
+              NSIncludesSubdomains: true
+              NSExceptionAllowsInsecureHTTPLoads: true
+            cntv.cn:
+              NSIncludesSubdomains: true
+              NSExceptionAllowsInsecureHTTPLoads: true
+            miguvideo.com:
+              NSIncludesSubdomains: true
+              NSExceptionAllowsInsecureHTTPLoads: true
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         # Substituted from the per-configuration build setting above:
@@ -94,6 +118,9 @@ targets:
         - FluxKitTests
         - FluxKitUITests
       gatherCoverageData: true
+      # Local StoreKit products used by Tests/StoreKitConfigurationTests.swift.
+      # RevenueCat still handles production purchases; this only makes StoreKit answer locally.
+      storeKitConfiguration: Configuration.storekit
 
   FluxKitShare:
     type: app-extension
@@ -149,6 +176,8 @@ targets:
     platform: iOS
     sources:
       - path: Tests
+      # Bundle resource for SKTestSession(configurationFileNamed: "Configuration").
+      - path: Configuration.storekit
     dependencies:
       - target: FluxKit
     settings:

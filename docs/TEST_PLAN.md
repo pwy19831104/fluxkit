@@ -568,3 +568,18 @@ ID:            BUG-<递增>
 | 播放 | `SubtitleTests` | 队列/续播状态机（原 `PlaybackQueueTests` 已在重构中删除，需重建） |
 | UI | 6 条 XCUITest | 下载全流程、Paywall 购买失败、分享扩展、深色/大字号 |
 | 非功能 | 无 | 启动/搜索/滚动性能、TSan/ASan、Leaks、soak |
+
+---
+
+## 附录 B：已落地的自动化（本次新增）
+
+| 能力 | 文件 | 说明 |
+|---|---|---|
+| StoreKit 本地配置 | `Configuration.storekit` | 与 ASC/RevenueCat 一致的两个订阅商品（`cloud.fluxkit.pro.monthly` / `.yearly`）、同一订阅组、en_US + zh_CN 本地化；已挂到 `FluxKit` scheme（`storeKitConfiguration`） |
+| 商品契约测试 | `Tests/StoreKitConfigurationTests.swift` | 4 条：ID 与配置一致、价格/周期/订阅组正确、购买后成为 current entitlement、未知 ID 不被解析 |
+| 性能基线 | `Tests/PerformanceTests.swift` | PERF-02（500 项搜索 ~0.6ms / 过滤+排序 ~1.3ms）、PERF-06（500 条索引存取 ~3.4ms） |
+| 启动性能 | `UITests/LaunchPerformanceTests.swift` | PERF-01，`XCTApplicationLaunchMetric(waitUntilResponsive: true)` |
+| 查询逻辑可测化 | `Sources/Core/LibraryQuery.swift` | 把片库过滤/排序从视图里抽成纯函数（UI 侧可后续改用它，行为已对齐） |
+| 夜间消毒器 CI | `.github/workflows/sanitizers.yml` | 每晚 TSan + ASan 跑全部单元测试，另有 Swift 6 严格并发编译（非阻塞） |
+
+**实测结果（本机 iPhone 18 Pro Max 模拟器）**：单元测试 147 条全绿；TSan 下 147 条全绿、0 数据竞争报告；asan 任务已配置在 CI。

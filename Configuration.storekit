@@ -1,0 +1,101 @@
+{
+  "identifier" : "F1C0A2B4",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21500001",
+      "localizations" : [
+        {
+          "description" : "",
+          "displayName" : "FluxKit Pro",
+          "locale" : "en_US"
+        },
+        {
+          "description" : "",
+          "displayName" : "FluxKit Pro",
+          "locale" : "zh_CN"
+        }
+      ],
+      "name" : "FluxKit Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "2.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6440000001",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "4 downloads at once + podcast auto-download.",
+              "displayName" : "FluxKit Pro Monthly",
+              "locale" : "en_US"
+            },
+            {
+              "description" : "同时下载 4 个任务，并自动下载播客",
+              "displayName" : "FluxKit Pro 月度",
+              "locale" : "zh_CN"
+            }
+          ],
+          "productID" : "cloud.fluxkit.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "FluxKit Pro Monthly",
+          "subscriptionGroupID" : "21500001",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "19.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6440000002",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "4 downloads at once + podcast auto-download.",
+              "displayName" : "FluxKit Pro Yearly",
+              "locale" : "en_US"
+            },
+            {
+              "description" : "同时下载 4 个任务，并自动下载播客",
+              "displayName" : "FluxKit Pro 年度",
+              "locale" : "zh_CN"
+            }
+          ],
+          "productID" : "cloud.fluxkit.pro.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "FluxKit Pro Yearly",
+          "subscriptionGroupID" : "21500001",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}
