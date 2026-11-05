@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(LibraryStore.self) private var library
+    @Environment(LanguageStore.self) private var language
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var selection: Tab = RootView.initialTab
@@ -12,6 +13,8 @@ struct RootView: View {
         switch ProcessInfo.processInfo.environment["SHOW_TAB"] {
         case "downloads": return .downloads
         case "library": return .library
+        case "podcasts": return .podcasts
+        case "settings": return .settings
         default: return .home
         }
         #else
@@ -19,13 +22,13 @@ struct RootView: View {
         #endif
     }
 
-    enum Tab: Hashable { case home, downloads, library }
+    enum Tab: Hashable { case home, downloads, podcasts, library, settings }
 
     private var activeCount: Int { library.active.count }
 
-    /// `streamkit://open?url=<percent-encoded link>`
+    /// `fluxkit://open?url=<percent-encoded link>`
     static func incomingLink(from url: URL) -> String? {
-        guard url.scheme?.lowercased() == "streamkit" else { return nil }
+        guard url.scheme?.lowercased() == "fluxkit" else { return nil }
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         guard let value = items.first(where: { $0.name == "url" })?.value,
               !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
@@ -47,19 +50,29 @@ struct RootView: View {
     var body: some View {
         TabView(selection: $selection) {
             HomeView(pendingLink: $pendingLink)
-                .tabItem { Label("Download", systemImage: "arrow.down.circle") }
+                .tabItem { Label(L("Download", "下载"), systemImage: "arrow.down.circle") }
                 .tag(Tab.home)
 
             DownloadsView()
-                .tabItem { Label("Downloads", systemImage: "square.stack.3d.down.right") }
+                .tabItem { Label(L("Downloads", "任务"), systemImage: "square.stack.3d.down.right") }
                 .badge(activeCount)
                 .tag(Tab.downloads)
 
+            PodcastsView()
+                .tabItem { Label(L("Podcasts", "播客"), systemImage: "dot.radiowaves.left.and.right") }
+                .tag(Tab.podcasts)
+
             LibraryView()
-                .tabItem { Label("Library", systemImage: "play.rectangle.on.rectangle") }
+                .tabItem { Label(L("Library", "片库"), systemImage: "play.rectangle.on.rectangle") }
                 .tag(Tab.library)
+
+            SettingsView()
+                .tabItem { Label(L("Settings", "设置"), systemImage: "gearshape") }
+                .tag(Tab.settings)
         }
         .tint(Theme.accent)
+        // Rebuild the tab content when the language changes so every `L(…)` picks up the new copy.
+        .id(language.language)
         .onOpenURL { url in
             guard let link = Self.incomingLink(from: url) else { return }
             selection = .home

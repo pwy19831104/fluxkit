@@ -1,0 +1,29 @@
+FluxKit saves media you are allowed to keep — HLS playlists, direct links, and podcast episodes — for offline playback on your iPhone.
+
+WHAT IT SAVES
+• HLS streams and .m3u8 playlists (video or audio)
+• Direct files: MP4, MOV, M4V, WebM, MP3, M4A, AAC, WAV, OGG
+• Podcast feeds: paste an RSS or Atom feed and pick episodes
+• Your own media: CDN links, S3/Cloudflare Stream URLs, self-hosted files, creator exports
+
+HOW IT WORKS
+1. Copy a link (or a whole share message).
+2. Tap Paste, then Download.
+3. FluxKit inspects the link, finds the media, and downloads it in the background.
+4. Play it offline in the app, share it, or save video to Photos.
+
+BUILT FOR OFFLINE
+• Background downloads continue while the app is suspended
+• Pause and resume picks up at the exact byte; HLS resumes from the last segment
+• Podcast subscriptions, OPML import/export, and optional auto-download
+• Queue with 1–4 concurrent downloads and a Wi-Fi-only rule
+• Background audio with lock-screen controls, speed (0.75×–2×), and resume
+• Library with search, sorting, multi-select delete, thumbnails and sizes
+• Optional local notification when a background download finishes
+• Share sheet and fluxkit:// deep links
+
+PRIVATE BY DESIGN
+No account, no sign-up, no analytics SDK, no cloud. Downloads go straight from the source to your device.
+
+WHAT IT DOESN'T DO
+FluxKit does not break DRM, bypass logins or paywalls, or extract media from platform-locked services. Links that only play inside another company's app (short-lived, signed playback URLs) are rejected with a clear explanation. Only download media you own or have permission to save.

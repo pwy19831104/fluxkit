@@ -1,0 +1,13 @@
+First release.
+• HLS (.m3u8) playlists, including audio renditions
+• Direct video and audio links
+• Podcast RSS/Atom feeds with an episode picker
+• Podcast subscriptions with OPML import/export and auto-download
+• Download queue with concurrency and Wi-Fi-only options
+• Background audio, lock-screen controls, playback speed and resume
+• Library search, sorting and multi-select delete
+• Play queue with previous/next, auto-advance and listened progress
+• Subtitles (embedded + downloaded HLS WebVTT) and Picture in Picture
+• FluxKit Pro: 4-at-once downloads and podcast auto-download
+• Files app access and "Import from Files"
+• Background downloads with pause, resume and local notifications

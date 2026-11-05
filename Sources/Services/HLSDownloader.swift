@@ -4,17 +4,25 @@ import Foundation
 
 enum HLSError: LocalizedError {
     case emptyPlaylist
+    case liveStream
     case unsupported(String)
     case decryptionFailed
 
     var errorDescription: String? {
         switch self {
         case .emptyPlaylist:
-            return "That stream playlist is empty."
+            return L("That stream playlist is empty.", "这个流播放列表是空的。")
+        case .liveStream:
+            return L("Live streams aren't supported yet. Try a link to a finished video.",
+                     "暂不支持直播流，换一个已结束的视频链接。")
         case .unsupported(let detail):
-            return "This stream isn't supported: \(detail)"
+            #if DEBUG
+            NSLog("HLS unsupported: \(detail)")
+            #endif
+            return L("This video can't be downloaded. Try a different link.",
+                     "这个视频无法下载，换一个链接试试。")
         case .decryptionFailed:
-            return "This stream is encrypted and couldn't be decoded."
+            return L("This stream is encrypted and couldn't be decoded.", "这个流已加密，无法解密。")
         }
     }
 }
@@ -51,9 +59,15 @@ struct HLSDownloader: Sendable {
         var sequence: Int
     }
 
+    struct SubtitleRendition {
+        var language: String
+        var url: URL
+    }
+
     private struct MediaPlaylist {
         var url: URL
         var audioURL: URL?
+        var subtitles: [SubtitleRendition]
     }
 
     // MARK: - Entry point
@@ -63,6 +77,12 @@ struct HLSDownloader: Sendable {
                   recordID: UUID,
                   fileName: @escaping (String) -> String,
                   progress: @escaping @Sendable (Int64, Int64) -> Void) async throws -> String {
+
+        let shop = AppPaths.hlsWork(recordID: recordID)
+        var completed = false
+        defer {
+            if completed { try? FileManager.default.removeItem(at: shop) }
+        }
 
         let playlist = try await resolveMediaPlaylist(from: playlistURL)
         let (videoSegments, isFragmentedMP4) = try await loadSegments(from: playlist.url)
@@ -77,17 +97,15 @@ struct HLSDownloader: Sendable {
         if expected > 0 { progress(0, expected) }
 
         let videoFile = AppPaths.temporary.appendingPathComponent("\(recordID.uuidString)-video.ts")
-        var reported: Int64 = 0
-        _ = try await stitch(videoSegments, into: videoFile) { delta in
-            reported += delta
-            progress(reported, expected > 0 ? expected : reported)
+        _ = try await stitch(videoSegments, into: videoFile, work: shop, prefix: "v") { bytes in
+            progress(bytes, expected > 0 ? expected : bytes)
         }
 
         var audioFile: URL?
         if !audioSegments.isEmpty {
             let file = AppPaths.temporary.appendingPathComponent("\(recordID.uuidString)-audio.ts")
             do {
-                _ = try await stitch(audioSegments, into: file) { _ in }
+                _ = try await stitch(audioSegments, into: file, work: shop, prefix: "a")
                 audioFile = file
             } catch {
                 NSLog("HLS audio track failed: \(error.localizedDescription)")
@@ -101,6 +119,8 @@ struct HLSDownloader: Sendable {
             try? FileManager.default.removeItem(at: destination)
             do {
                 try FileManager.default.moveItem(at: videoFile, to: destination)
+                await downloadSubtitles(playlist.subtitles, recordID: recordID)
+                completed = true
                 return finalName
             } catch {
                 NSLog("HLS fMP4 move failed: \(error.localizedDescription)")
@@ -111,6 +131,8 @@ struct HLSDownloader: Sendable {
         if let name = await exportMP4(video: videoFile, audio: audioFile, finalName: fileName) {
             try? FileManager.default.removeItem(at: videoFile)
             if let audioFile { try? FileManager.default.removeItem(at: audioFile) }
+            await downloadSubtitles(playlist.subtitles, recordID: recordID)
+            completed = true
             return name
         }
 
@@ -120,20 +142,22 @@ struct HLSDownloader: Sendable {
         try? FileManager.default.removeItem(at: destination)
         try FileManager.default.moveItem(at: videoFile, to: destination)
         if let audioFile { try? FileManager.default.removeItem(at: audioFile) }
+        await downloadSubtitles(playlist.subtitles, recordID: recordID)
+        completed = true
         return fallbackName
     }
 
     // MARK: - Segment pipeline
 
-    /// Downloads segments with a small amount of concurrency and writes them in order.
+    /// Downloads segments with a small amount of concurrency.
+    ///
+    /// Each segment is written to its own file under `work`, so a paused/crashed job can skip
+    /// everything already on disk. The segments are concatenated only when the whole playlist
+    /// is present.
     @discardableResult
     private func stitch(_ segments: [Segment], into fileURL: URL,
-                        onProgress: @escaping (Int64) -> Void) async throws -> Int64 {
-        try? FileManager.default.removeItem(at: fileURL)
-        FileManager.default.createFile(atPath: fileURL.path, contents: nil)
-        let handle = try FileHandle(forWritingTo: fileURL)
-        defer { try? handle.close() }
-
+                        work: URL, prefix: String,
+                        onBytes: @escaping (Int64) -> Void = { _ in }) async throws -> Int64 {
         // Pre-fetch encryption keys so the parallel workers don't duplicate requests.
         var keys: [URL: Data] = [:]
         for segment in segments {
@@ -142,31 +166,59 @@ struct HLSDownloader: Sendable {
             keys[uri] = try await fetchRaw(uri)
         }
 
-        let batchSize = 6
-        var total: Int64 = 0
-        var index = 0
+        func segmentFile(_ index: Int) -> URL {
+            work.appendingPathComponent("\(prefix)-\(index).seg")
+        }
+        func size(of url: URL) -> Int64 {
+            (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value ?? 0
+        }
 
+        var cached: Int64 = 0
+        for index in segments.indices where FileManager.default.fileExists(atPath: segmentFile(index).path) {
+            cached += size(of: segmentFile(index))
+        }
+        if cached > 0 { onBytes(cached) }
+
+        let batchSize = 6
+        var index = 0
         while index < segments.count {
             try Task.checkCancellation()
             let end = min(index + batchSize, segments.count)
-            let batch = Array(segments[index..<end])
 
-            let datas = try await withThrowingTaskGroup(of: (Int, Data).self) { group -> [Data] in
-                for (offset, segment) in batch.enumerated() {
-                    group.addTask { (offset, try await self.fetchSegment(segment, keys: keys)) }
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                for segmentIndex in index..<end {
+                    let file = segmentFile(segmentIndex)
+                    guard !FileManager.default.fileExists(atPath: file.path) else { continue }
+                    let segment = segments[segmentIndex]
+                    group.addTask {
+                        let data = try await self.fetchSegment(segment, keys: keys)
+                        try data.write(to: file, options: .atomic)
+                    }
                 }
-                var collected = [(Int, Data)]()
-                for try await result in group { collected.append(result) }
-                return collected.sorted { $0.0 < $1.0 }.map(\.1)
+                try await group.waitForAll()
             }
 
-            for data in datas {
-                try handle.write(contentsOf: data)
-                total += Int64(data.count)
-                onProgress(Int64(data.count))
+            var done: Int64 = 0
+            for segmentIndex in 0..<end {
+                done += size(of: segmentFile(segmentIndex))
             }
+            onBytes(done)
             index = end
         }
+
+        // Concatenate in order.
+        try? FileManager.default.removeItem(at: fileURL)
+        FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: fileURL)
+        defer { try? handle.close() }
+
+        var total: Int64 = 0
+        for segmentIndex in segments.indices {
+            let data = try Data(contentsOf: segmentFile(segmentIndex), options: .mappedIfSafe)
+            try handle.write(contentsOf: data)
+            total += Int64(data.count)
+        }
+        onBytes(total)
         return total
     }
 
@@ -195,8 +247,15 @@ struct HLSDownloader: Sendable {
     }
 
     private func estimatedSize(of segments: [Segment]) async throws -> Int64 {
-        if segments.allSatisfy({ $0.byteRange != nil }) {
-            return segments.reduce(0) { $0 + ($1.byteRange?.length ?? 0) }
+        let ranged = segments.filter { $0.byteRange != nil }
+        if ranged.count == segments.count, !ranged.isEmpty {
+            return ranged.reduce(0) { $0 + ($1.byteRange?.length ?? 0) }
+        }
+        if !ranged.isEmpty {
+            // Byte-range playlists (single file, many ranges): scale the known ranges.
+            let total = ranged.reduce(0) { $0 + ($1.byteRange?.length ?? 0) }
+            let average = Double(total) / Double(ranged.count)
+            return Int64(average * Double(segments.count))
         }
         guard let first = segments.first, let size = try? await contentLength(first.url) else { return 0 }
         return size * Int64(segments.count)
@@ -209,7 +268,7 @@ struct HLSDownloader: Sendable {
         guard text.contains("#EXTM3U") else { throw HLSError.unsupported("not an HLS playlist") }
 
         guard text.contains("#EXT-X-STREAM-INF") else {
-            return MediaPlaylist(url: finalURL, audioURL: nil)
+            return MediaPlaylist(url: finalURL, audioURL: nil, subtitles: [])
         }
 
         var variants: [(bandwidth: Int, url: URL)] = []
@@ -245,12 +304,78 @@ struct HLSDownloader: Sendable {
             }
         }
 
-        return MediaPlaylist(url: best.url, audioURL: audioURL)
+        return MediaPlaylist(
+            url: best.url,
+            audioURL: audioURL,
+            subtitles: Self.subtitleRenditions(in: text, baseURL: finalURL)
+        )
+    }
+
+    /// Parses `#EXT-X-MEDIA:TYPE=SUBTITLES` renditions from a master playlist.
+    static func subtitleRenditions(in text: String, baseURL: URL) -> [SubtitleRendition] {
+        var result: [SubtitleRendition] = []
+        var seen = Set<String>()
+        for rawLine in text.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard line.hasPrefix("#EXT-X-MEDIA") else { continue }
+            let attrs = attributes(line)
+            guard attrs["TYPE"]?.uppercased() == "SUBTITLES",
+                  let uri = attrs["URI"],
+                  let url = URL(string: uri, relativeTo: baseURL)?.absoluteURL else { continue }
+            let language = attrs["LANGUAGE"] ?? attrs["NAME"] ?? "und"
+            if seen.insert(language).inserted {
+                result.append(SubtitleRendition(language: language, url: url))
+            }
+        }
+        return result
+    }
+
+    /// Saves subtitle renditions next to the download as `<record-id>.<language>.vtt`.
+    private func downloadSubtitles(_ renditions: [SubtitleRendition], recordID: UUID) async {
+        guard !renditions.isEmpty else { return }
+        AppPaths.removeSubtitles(recordID: recordID)
+
+        for rendition in renditions {
+            do {
+                let (playlistText, base) = try await fetchText(rendition.url)
+                var segments: [URL] = []
+                for rawLine in playlistText.components(separatedBy: .newlines) {
+                    let line = rawLine.trimmingCharacters(in: .whitespaces)
+                    guard !line.isEmpty, !line.hasPrefix("#") else { continue }
+                    if let url = URL(string: line, relativeTo: base)?.absoluteURL {
+                        segments.append(url)
+                    }
+                }
+
+                let cues: [SubtitleCue]
+                if segments.isEmpty {
+                    let offset = WebVTTParser.timestampMapOffset(in: playlistText) ?? 0
+                    cues = WebVTTParser.parse(playlistText, offset: offset)
+                } else {
+                    var documents: [String] = []
+                    for segment in segments {
+                        if let (text, _) = try? await fetchText(segment) {
+                            documents.append(text)
+                        }
+                    }
+                    cues = WebVTTParser.merge(segments: documents)
+                }
+                guard !cues.isEmpty else { continue }
+                let data = Data(WebVTTParser.document(from: cues).utf8)
+                try data.write(
+                    to: AppPaths.subtitleURL(recordID: recordID, language: rendition.language),
+                    options: .atomic
+                )
+            } catch {
+                NSLog("HLS subtitle \(rendition.language) failed: \(error.localizedDescription)")
+            }
+        }
     }
 
     private func loadSegments(from url: URL) async throws -> (segments: [Segment], isFragmentedMP4: Bool) {
         let (text, finalURL) = try await fetchText(url)
         guard text.contains("#EXTM3U") else { throw HLSError.unsupported("not an HLS playlist") }
+        if Self.isLivePlaylist(text) { throw HLSError.liveStream }
 
         var segments: [Segment] = []
         var currentKey: KeyInfo?
@@ -281,7 +406,14 @@ struct HLSDownloader: Sendable {
             } else if line.hasPrefix("#EXT-X-MAP") {
                 let attrs = Self.attributes(String(line.dropFirst("#EXT-X-MAP:".count)))
                 if let uri = attrs["URI"], let mapURL = URL(string: uri, relativeTo: finalURL)?.absoluteURL {
-                    pendingInit = Segment(url: mapURL, byteRange: nil, key: nil, sequence: -1)
+                    var mapRange: (offset: Int64, length: Int64)?
+                    if let raw = attrs["BYTERANGE"] {
+                        let parts = raw.split(separator: "@")
+                        if let length = Int64(parts[0]) {
+                            mapRange = (parts.count > 1 ? (Int64(parts[1]) ?? 0) : 0, length)
+                        }
+                    }
+                    pendingInit = Segment(url: mapURL, byteRange: mapRange, key: nil, sequence: -1)
                 }
             } else if line.hasPrefix("#EXT-X-BYTERANGE") {
                 let value = String(line.dropFirst("#EXT-X-BYTERANGE:".count))
@@ -459,6 +591,11 @@ struct HLSDownloader: Sendable {
     }
 
     // MARK: - Attribute parsing
+
+    /// A media playlist without `#EXT-X-ENDLIST` is live/event unless it explicitly says VOD.
+    static func isLivePlaylist(_ text: String) -> Bool {
+        !text.contains("#EXT-X-ENDLIST") && !text.contains("#EXT-X-PLAYLIST-TYPE:VOD")
+    }
 
     static func attributes(_ text: String) -> [String: String] {
         var result: [String: String] = [:]

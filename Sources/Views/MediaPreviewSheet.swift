@@ -33,24 +33,25 @@ struct MediaPreviewSheet: View {
                                 started = true
                                 dismiss()
                             } label: {
-                                Label("Start download", systemImage: "arrow.down.to.line.compact")
+                                Label(L("Start download", "开始下载"), systemImage: "arrow.down.to.line.compact")
                                     .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(PrimaryButtonStyle())
                         }
 
-                        Text("Saved inside the app. Share it or save it to Photos when it's done.")
+                        Text(L("Saved in the app. Share it or save it to Photos when it's done.",
+                               "保存在 App 里，完成后可分享或存入相册。"))
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.textSecondary)
                     }
                     .padding(20)
                 }
             }
-            .navigationTitle("Ready to download")
+            .navigationTitle(L("Ready to download", "准备下载"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
+                    Button(L("Close", "关闭")) { dismiss() }
                         .foregroundStyle(Theme.textSecondary)
                 }
             }
@@ -62,7 +63,7 @@ struct MediaPreviewSheet: View {
     private var displayTitle: String {
         if let title = media.title, !title.isEmpty { return title }
         let name = media.url.deletingPathExtension().lastPathComponent
-        return name.isEmpty ? "Video" : name
+        return name.isEmpty ? L("Video", "视频") : name
     }
 
     @ViewBuilder
@@ -99,9 +100,8 @@ struct MediaPreviewSheet: View {
 
     private var infoGrid: some View {
         HStack(spacing: 10) {
-            infoCell(title: "TYPE", value: media.kind == .hls ? "HLS stream" : "Video file")
-            infoCell(title: "SIZE", value: Fmt.bytes(media.contentLength ?? 0))
-            infoCell(title: "FORMAT", value: media.fileExtension.uppercased())
+            infoCell(title: L("SIZE", "大小"), value: Fmt.bytes(media.contentLength ?? 0))
+            infoCell(title: L("FORMAT", "格式"), value: media.fileExtension.uppercased())
         }
     }
 

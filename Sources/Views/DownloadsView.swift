@@ -2,7 +2,7 @@ import SwiftUI
 
 struct DownloadsView: View {
     @Environment(LibraryStore.self) private var library
-    @State private var playing: DownloadRecord?
+    @State private var playing: PlaybackRequest?
 
     private var isEmpty: Bool {
         library.active.isEmpty && library.failed.isEmpty && library.finished.isEmpty
@@ -16,21 +16,22 @@ struct DownloadsView: View {
                 if isEmpty {
                     EmptyStateView(
                         icon: "arrow.down.circle",
-                        title: "No downloads yet",
-                        message: "Head to the Download tab, paste a video link and tap Download."
+                        title: L("No downloads yet", "还没有下载任务"),
+                        message: L("Paste a link or podcast feed on the Download tab to get started.",
+                                   "去「下载」页粘贴链接或播客订阅就能开始。")
                     )
                 } else {
                     ScrollView(showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 22) {
                             if !library.active.isEmpty {
-                                section(title: "IN PROGRESS", records: library.active)
+                                section(title: L("IN PROGRESS", "进行中"), records: library.active)
                             }
                             if !library.failed.isEmpty {
-                                section(title: "NEEDS ATTENTION", records: library.failed)
+                                section(title: L("NEEDS ATTENTION", "需要处理"), records: library.failed)
                             }
                             if !library.finished.isEmpty {
                                 VStack(alignment: .leading, spacing: 12) {
-                                    Text("COMPLETED")
+                                    Text(L("COMPLETED", "已完成"))
                                         .font(.system(size: 11, weight: .bold))
                                         .tracking(1.2)
                                         .foregroundStyle(Theme.textSecondary)
@@ -43,41 +44,37 @@ struct DownloadsView: View {
                                                 Button {
                                                     open(record)
                                                 } label: {
-                                                    Label("Play", systemImage: "play.fill")
+                                                    Label(L("Play", "播放"), systemImage: "play.fill")
                                                 }
                                                 if let url = library.fileURL(for: record) {
                                                     ShareLink(item: url) {
-                                                        Label("Share", systemImage: "square.and.arrow.up")
+                                                        Label(L("Share", "分享"), systemImage: "square.and.arrow.up")
                                                     }
                                                 }
                                                 Button(role: .destructive) {
                                                     library.remove(record.id)
                                                 } label: {
-                                                    Label("Delete", systemImage: "trash")
+                                                    Label(L("Delete", "删除"), systemImage: "trash")
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
-                            Color.clear.frame(height: 12)
+
+                            SponsorSlot(style: .banner)
+                            Color.clear.frame(height: 96)
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 8)
                     }
                 }
             }
-            .navigationTitle("Downloads")
+            .navigationTitle(L("Downloads", "下载任务"))
             .navigationBarTitleDisplayMode(.large)
         }
-        .fullScreenCover(item: $playing) { record in
-            if let url = library.fileURL(for: record) {
-                PlayerScreen(record: record, fileURL: url)
-            } else {
-                EmptyStateView(icon: "exclamationmark.triangle",
-                               title: "File missing",
-                               message: "This download is no longer on the device.")
-            }
+        .fullScreenCover(item: $playing) { request in
+            PlayerScreen(request: request)
         }
     }
 
@@ -96,8 +93,8 @@ struct DownloadsView: View {
     }
 
     private func open(_ record: DownloadRecord) {
-        guard library.fileURL(for: record) != nil else { return }
-        playing = record
+        guard let url = library.fileURL(for: record) else { return }
+        playing = PlaybackRequest(record: record, queue: library.finished, fileURL: url)
     }
 }
 

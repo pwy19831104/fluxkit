@@ -43,3 +43,23 @@ enum ThumbnailService {
         return seconds.isFinite && seconds > 0 ? seconds : nil
     }
 }
+
+extension ThumbnailService {
+    /// Persists artwork shipped by a podcast feed so audio rows have a thumbnail too.
+    static func saveRemoteImage(from url: URL, recordID: UUID) async -> String? {
+        guard let (data, response) = try? await URLSession.shared.data(from: url),
+              let http = response as? HTTPURLResponse,
+              (200..<400).contains(http.statusCode),
+              let image = UIImage(data: data),
+              let jpeg = image.jpegData(compressionQuality: 0.82) else {
+            return nil
+        }
+        let name = "\(recordID.uuidString).jpg"
+        do {
+            try jpeg.write(to: AppPaths.thumbnailURL(fileName: name), options: .atomic)
+            return name
+        } catch {
+            return nil
+        }
+    }
+}

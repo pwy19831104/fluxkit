@@ -27,26 +27,111 @@ struct LinkResolver {
 
     // MARK: - Entry point
 
+    /// What a pasted link turns into: a single media file/stream, or a feed with episodes.
+    enum ResolvedInput: Sendable {
+        case media(ResolvedMedia)
+        case podcast(PodcastFeed)
+    }
+
     func resolve(input: String) async throws -> ResolvedMedia {
+        switch try await resolveInput(input) {
+        case .media(let media):
+            return media
+        case .podcast(let feed):
+            // Callers that only understand single files get the newest episode.
+            guard let newest = feed.episodes.first else { throw FeedParserError.noEpisodes }
+            return newest.media(feed: feed)
+        }
+    }
+
+    /// Resolves a pasted link, detecting podcast/Atom feeds as well as media.
+    func resolveInput(_ input: String) async throws -> ResolvedInput {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw ResolveError.emptyInput }
-        guard let url = Self.normalizedURL(from: trimmed) else { throw ResolveError.invalidURL }
+        // Users paste entire share blurbs (“复制打开… https://… w@S.LJ”), not clean links.
+        guard let link = Self.linkString(in: trimmed),
+              let url = Self.normalizedURL(from: link) else { throw ResolveError.invalidURL }
+        if let platform = Self.localizedPlatformName(for: url) {
+            throw ResolveError.unsupportedPlatform(platform)
+        }
+        return try await resolveInput(url: url)
+    }
 
-        return try await resolve(url: url, depth: 0)
+    private func resolveInput(url: URL) async throws -> ResolvedInput {
+        let probe = try await probeURL(url)
+
+        // A file or HLS playlist: nothing else to do.
+        if Self.mediaKind(for: probe.contentType, url: probe.url) != nil {
+            return .media(try await resolve(url: url, depth: 0))
+        }
+
+        // Podcasts and other RSS/Atom feeds. Feeds can be large (years of episodes),
+        // so they get a bigger read budget than normal pages.
+        if FeedParser.looksLikeFeed(contentType: probe.contentType, url: probe.url) {
+            let page = try await fetchText(probe.url)
+            guard FeedParser.looksLikeFeedText(page.html) else {
+                throw ResolveError.noMediaFound
+            }
+            return .podcast(try FeedParser.parse(text: page.html, feedURL: page.url))
+        }
+
+        return .media(try await resolve(url: url, depth: 0))
+    }
+
+    /// The first web address inside a string, or `nil`. Kept here so the views and the
+    /// share extension have one entry point.
+    static func linkString(in text: String) -> String? {
+        LinkTextExtractor.firstLink(in: text)
     }
 
     static func normalizedURL(from string: String) -> URL? {
-        var candidate = string
-        if !candidate.contains("://") {
-            guard candidate.contains("."), !candidate.contains(" ") else { return nil }
-            candidate = "https://" + candidate
-        }
-        guard var comps = URLComponents(string: candidate),
-              let scheme = comps.scheme?.lowercased(),
-              scheme == "http" || scheme == "https",
-              comps.host?.isEmpty == false else { return nil }
-        if comps.path.isEmpty { comps.path = "/" }
-        return comps.url
+        LinkURL.normalized(from: string)
+    }
+
+    /// Media scraped from a page often only works with its page as `Referer`.
+    static func refererHeaders(for pageURL: URL?) -> [String: String] {
+        guard let pageURL else { return [:] }
+        return ["Referer": pageURL.absoluteString]
+    }
+
+    // MARK: - Unsupported platforms
+
+    /// Services that sign their media URLs and need a server-side extractor. Resolving them
+    /// on-device is not possible (and bypassing their terms/DRM is out of scope), so fail fast
+    /// with a clear message instead of downloading an HTML page and giving up.
+    private static let unsupportedPlatforms: [(suffix: String, english: String, chinese: String)] = [
+        ("douyin.com", "Douyin", "抖音"),
+        ("iesdouyin.com", "Douyin", "抖音"),
+        ("tiktok.com", "TikTok", "TikTok"),
+        ("youtube.com", "YouTube", "YouTube"),
+        ("youtu.be", "YouTube", "YouTube"),
+        ("instagram.com", "Instagram", "Instagram"),
+        ("facebook.com", "Facebook", "Facebook"),
+        ("fb.watch", "Facebook", "Facebook"),
+        ("twitter.com", "X", "X"),
+        ("x.com", "X", "X"),
+        ("kuaishou.com", "Kuaishou", "快手"),
+        ("xiaohongshu.com", "Xiaohongshu", "小红书"),
+        ("xhslink.com", "Xiaohongshu", "小红书"),
+        ("bilibili.com", "Bilibili", "哔哩哔哩"),
+        ("b23.tv", "Bilibili", "哔哩哔哩"),
+        ("netflix.com", "Netflix", "Netflix")
+    ]
+
+    /// - Returns: the English display name of the platform, or `nil` when the host is fine.
+    static func unsupportedPlatform(for url: URL) -> String? {
+        platformEntry(for: url)?.english
+    }
+
+    /// Same, in the language the UI is currently in.
+    static func localizedPlatformName(for url: URL, language: AppLanguage = .current) -> String? {
+        guard let entry = platformEntry(for: url) else { return nil }
+        return L(entry.english, entry.chinese, language: language)
+    }
+
+    private static func platformEntry(for url: URL) -> (suffix: String, english: String, chinese: String)? {
+        guard let host = url.host?.lowercased() else { return nil }
+        return unsupportedPlatforms.first { host == $0.suffix || host.hasSuffix("." + $0.suffix) }
     }
 
     // MARK: - Resolution
@@ -89,7 +174,8 @@ struct LinkResolver {
                 mimeType: candidateProbe.contentType,
                 contentLength: kind == .hls ? nil : candidateProbe.contentLength,
                 thumbnailURL: Self.thumbnailURL(in: html, base: page.url),
-                pageURL: probe.url
+                pageURL: probe.url,
+                httpHeaders: Self.refererHeaders(for: probe.url)
             )
         }
 
@@ -106,7 +192,8 @@ struct LinkResolver {
             mimeType: candidateProbe?.contentType ?? (fallbackKind == .hls ? "application/vnd.apple.mpegurl" : nil),
             contentLength: candidateProbe?.contentLength,
             thumbnailURL: Self.thumbnailURL(in: html, base: page.url),
-            pageURL: probe.url
+            pageURL: probe.url,
+            httpHeaders: Self.refererHeaders(for: probe.url)
         )
     }
 
@@ -167,6 +254,20 @@ struct LinkResolver {
         } catch {
             throw ResolveError.network(error.localizedDescription)
         }
+    }
+
+    /// Reads a whole feed document (podcast feeds routinely exceed 10 MB).
+    private func fetchText(_ url: URL) async throws -> Page {
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<400).contains(http.statusCode) else {
+            throw ResolveError.network("Could not load that feed.")
+        }
+        let text = String(data: data, encoding: .utf8)
+            ?? String(data: data, encoding: .isoLatin1)
+            ?? ""
+        return Page(url: response.url ?? url, html: text)
     }
 
     private func fetchPage(_ url: URL) async throws -> Page {

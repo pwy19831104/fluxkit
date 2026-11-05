@@ -2,7 +2,7 @@ import Foundation
 
 /// Hand-off area between the share extension and the app, backed by an App Group.
 enum SharedInbox {
-    static let appGroupIdentifier = "group.com.streamkit.app"
+    static let appGroupIdentifier = "group.cloud.streamkit.app"
 
     private static let key = "pendingLinks"
     private static let limit = 20

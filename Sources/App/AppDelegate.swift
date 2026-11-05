@@ -5,6 +5,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // Move media from Application Support to Documents (Files app visibility).
+        AppPaths.migrateMediaIfNeeded()
+        // Drop half-written HLS segments from a previous run that was killed.
+        AppPaths.purgeTemporaryFiles()
         // Touch the manager so the background URLSession is created (and reconnected after
         // a relaunch triggered by the system) even before any UI is built.
         _ = DownloadManager.shared

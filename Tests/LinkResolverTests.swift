@@ -1,5 +1,5 @@
 import XCTest
-@testable import StreamKit
+@testable import FluxKit
 
 final class LinkResolverTests: XCTestCase {
 
@@ -172,7 +172,7 @@ final class HLSPlaylistTests: XCTestCase {
 final class DeepLinkTests: XCTestCase {
 
     func testParsesEncodedLinkFromScheme() {
-        let url = URL(string: "streamkit://open?url=https%3A%2F%2Fcdn.example.com%2Fclip.mp4")!
+        let url = URL(string: "fluxkit://open?url=https%3A%2F%2Fcdn.example.com%2Fclip.mp4")!
         XCTAssertEqual(RootView.incomingLink(from: url), "https://cdn.example.com/clip.mp4")
     }
 
@@ -180,8 +180,22 @@ final class DeepLinkTests: XCTestCase {
         XCTAssertNil(RootView.incomingLink(from: URL(string: "https://example.com?url=a")!))
     }
 
+    func testRefererHeaderIsBuiltForScrapedPages() {
+        let page = URL(string: "https://example.com/watch/123")!
+        XCTAssertEqual(LinkResolver.refererHeaders(for: page)["Referer"], page.absoluteString)
+        XCTAssertTrue(LinkResolver.refererHeaders(for: nil).isEmpty)
+    }
+
     func testIgnoresEmptyPayload() {
-        XCTAssertNil(RootView.incomingLink(from: URL(string: "streamkit://open?url=")!))
-        XCTAssertNil(RootView.incomingLink(from: URL(string: "streamkit://open")!))
+        XCTAssertNil(RootView.incomingLink(from: URL(string: "fluxkit://open?url=")!))
+        XCTAssertNil(RootView.incomingLink(from: URL(string: "fluxkit://open")!))
+    }
+}
+
+final class HLSLiveTests: XCTestCase {
+    func testLivePlaylistDetection() {
+        XCTAssertTrue(HLSDownloader.isLivePlaylist("#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:1\nseg1.ts"))
+        XCTAssertFalse(HLSDownloader.isLivePlaylist("#EXTM3U\n#EXT-X-ENDLIST\nseg1.ts"))
+        XCTAssertFalse(HLSDownloader.isLivePlaylist("#EXTM3U\n#EXT-X-PLAYLIST-TYPE:VOD\nseg1.ts"))
     }
 }

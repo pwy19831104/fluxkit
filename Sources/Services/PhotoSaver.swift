@@ -9,9 +9,14 @@ enum PhotoSaverError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .accessDenied:
-            return "Photo access was denied. Enable it in Settings to save videos."
+            return L("Photo access was denied. Enable it in Settings to save videos.",
+                     "没有相册权限。请到「设置」里允许访问相册后再保存。")
         case .failed(let reason):
-            return "Could not save to Photos: \(reason)"
+            #if DEBUG
+            NSLog("Photo save failed: \(reason)")
+            #endif
+            return L("Couldn't save to Photos. Please try again.",
+                     "无法保存到相册，请重试。")
         }
     }
 }
@@ -30,7 +35,8 @@ enum PhotoSaver {
                 if success {
                     continuation.resume()
                 } else {
-                    continuation.resume(throwing: PhotoSaverError.failed(error?.localizedDescription ?? "Unknown error"))
+                    let reason = error?.localizedDescription ?? L("Unknown error", "未知错误")
+                    continuation.resume(throwing: PhotoSaverError.failed(reason))
                 }
             }
         }

@@ -5,12 +5,13 @@ struct HomeView: View {
     @Binding var pendingLink: String?
 
     @Environment(LibraryStore.self) private var library
+    @Environment(LanguageStore.self) private var language
 
     @State private var link = ""
     @State private var isResolving = false
     @State private var errorMessage: String?
     @State private var preview: ResolvedMedia?
-    @State private var hasClipboardLink = false
+    @State private var podcast: PodcastFeed?
     @FocusState private var isFieldFocused: Bool
 
     private var canSubmit: Bool {
@@ -28,14 +29,13 @@ struct HomeView: View {
                     if let errorMessage {
                         errorBanner(errorMessage)
                     }
-                    clipboardBanner
-                    supportedNote
+                    quickTip
                     if !library.active.isEmpty {
                         activeSection
                     }
-                    howItWorks
+                    SponsorSlot(style: .banner)
                     legalNote
-                    Color.clear.frame(height: 24)
+                    Color.clear.frame(height: 96)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -45,7 +45,9 @@ struct HomeView: View {
         .sheet(item: $preview) { media in
             MediaPreviewSheet(media: media)
         }
-        .onAppear(perform: detectClipboard)
+        .sheet(item: $podcast) { feed in
+            PodcastFeedSheet(feed: feed)
+        }
         .onChange(of: pendingLink) { _, newValue in
             guard let newValue else { return }
             link = newValue
@@ -65,11 +67,15 @@ struct HomeView: View {
                 Image(systemName: "arrow.down.circle.fill")
                     .font(.system(size: 34, weight: .semibold))
                     .foregroundStyle(Theme.brandGradient)
-                Text("StreamKit")
+                Text("FluxKit")
                     .font(.system(size: 32, weight: .bold, design: .rounded))
                     .foregroundStyle(Theme.textPrimary)
+                    .accessibilityIdentifier("home-title")
+                Spacer(minLength: 8)
+                languageMenu
             }
-            Text("Paste a link. Keep the video — no account, no clutter.")
+            Text(L("Save HLS video, direct links, and podcasts.",
+                   "保存 HLS 视频、直链和播客。"))
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(Theme.textSecondary)
         }
@@ -77,12 +83,39 @@ struct HomeView: View {
         .padding(.bottom, 4)
     }
 
+    /// English / 中文. Written in each language so both are readable; the default comes from the
+    /// device region until the user picks one here.
+    private var languageMenu: some View {
+        Menu {
+            ForEach(AppLanguage.allCases, id: \.self) { option in
+                Button {
+                    language.set(option)
+                } label: {
+                    if language.language == option {
+                        Label(option.displayName, systemImage: "checkmark")
+                    } else {
+                        Text(option.displayName)
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "globe")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Theme.textSecondary)
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(Theme.surface))
+                .overlay(Circle().stroke(Theme.stroke, lineWidth: 1))
+        }
+        .accessibilityLabel(L("Language", "语言"))
+    }
+
     private var inputCard: some View {
         VStack(spacing: 14) {
             HStack(spacing: 10) {
                 Image(systemName: "link")
                     .foregroundStyle(Theme.textSecondary)
-                TextField("Paste a video link", text: $link)
+                TextField(L("Paste a link or podcast feed", "粘贴链接或播客订阅"), text: $link)
+                    .accessibilityIdentifier("home-link-field")
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
@@ -91,10 +124,7 @@ struct HomeView: View {
                     .foregroundStyle(Theme.textPrimary)
                     .onSubmit(submit)
                 if !link.isEmpty {
-                    Button {
-                        link = ""
-                        errorMessage = nil
-                    } label: {
+                    Button(action: clearInput) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(Theme.textSecondary)
                     }
@@ -115,21 +145,23 @@ struct HomeView: View {
 
             HStack(spacing: 10) {
                 Button(action: pasteFromClipboard) {
-                    Label("Paste", systemImage: "doc.on.clipboard")
+                    Label(L("Paste", "粘贴"), systemImage: "doc.on.clipboard")
                 }
                 .buttonStyle(GhostButtonStyle())
+                .accessibilityIdentifier("home-paste")
 
                 Button(action: submit) {
                     HStack(spacing: 8) {
                         if isResolving {
                             ProgressView().tint(.black)
                         }
-                        Text(isResolving ? "Checking…" : "Download")
+                        Text(isResolving ? L("Checking…", "解析中…") : L("Download", "下载"))
                     }
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(PrimaryButtonStyle(enabled: canSubmit))
                 .disabled(!canSubmit)
+                .accessibilityIdentifier("home-download")
             }
         }
         .padding(16)
@@ -160,40 +192,14 @@ struct HomeView: View {
         )
     }
 
-    @ViewBuilder
-    private var clipboardBanner: some View {
-        if hasClipboardLink, link.isEmpty {
-            Button(action: pasteFromClipboard) {
-                HStack(spacing: 10) {
-                    Image(systemName: "sparkles")
-                        .foregroundStyle(Theme.accentSecondary)
-                    Text("Link detected in your clipboard")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.textPrimary)
-                    Spacer()
-                    Text("Use it")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(Theme.accent)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Theme.accent.opacity(0.1))
-                )
-            }
-            .buttonStyle(.plain)
-            .transition(.opacity)
-        }
-    }
-
-    private var supportedNote: some View {
+    private var quickTip: some View {
         HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.success)
+            Image(systemName: "lightbulb.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.accent)
                 .padding(.top, 2)
-            Text("Direct MP4 / MOV links, HLS (.m3u8) streams, and public pages that embed a video.")
+            Text(L("Copy a link, then tap Paste — HLS playlists, media files, or a podcast feed.",
+                   "复制链接后点「粘贴」——HLS 播放列表、音视频文件或播客订阅。"))
                 .font(.system(size: 12.5, weight: .medium))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -203,7 +209,7 @@ struct HomeView: View {
 
     private var activeSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("IN PROGRESS")
+            Text(L("IN PROGRESS", "进行中"))
                 .font(.system(size: 11, weight: .bold))
                 .tracking(1.2)
                 .foregroundStyle(Theme.textSecondary)
@@ -216,59 +222,15 @@ struct HomeView: View {
         }
     }
 
-    private var howItWorks: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("HOW IT WORKS")
-                .font(.system(size: 11, weight: .bold))
-                .tracking(1.2)
-                .foregroundStyle(Theme.textSecondary)
-
-            VStack(spacing: 10) {
-                step(number: "1", title: "Copy a video link", detail: "From Safari, Files, or any app.")
-                step(number: "2", title: "Tap Download", detail: "StreamKit inspects the link and finds the media.")
-                step(number: "3", title: "Keep it offline", detail: "Play it in the app or save it to Photos.")
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
-                .fill(Theme.surface.opacity(0.7))
-                .overlay(
-                    RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
-                        .stroke(Theme.stroke, lineWidth: 1)
-                )
-        )
-    }
-
     private var legalNote: some View {
-        Text("Only download videos you have permission to save. StreamKit doesn't bypass DRM or paid access.")
+        Text(L("Only download media you have the right to save.",
+               "请只下载你有权保存的媒体。"))
             .font(.system(size: 11))
             .foregroundStyle(Theme.textSecondary.opacity(0.75))
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 8)
             .padding(.top, 4)
-    }
-
-    private func step(number: String, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text(number)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Theme.textPrimary)
-                .frame(width: 22, height: 22)
-                .background(Circle().fill(Theme.surfaceRaised))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.textPrimary)
-                Text(detail)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
     }
 
     // MARK: - Actions
@@ -285,24 +247,29 @@ struct HomeView: View {
     }
     #endif
 
-    private func detectClipboard() {
-        guard link.isEmpty else { return }
-        UIPasteboard.general.detectPatterns(for: [\.probableWebURL]) { result in
-            guard case .success(let patterns) = result, !patterns.isEmpty else { return }
-            Task { @MainActor in hasClipboardLink = true }
-        }
+    private func clearInput() {
+        link = ""
+        errorMessage = nil
     }
 
     private func pasteFromClipboard() {
-        let value = UIPasteboard.general.url?.absoluteString ?? UIPasteboard.general.string
-        guard let value, !value.isEmpty else { return }
-        link = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        // `string` first: share blurbs (“复制打开抖音… https://…”) arrive as plain text, not URL items.
+        let raw = UIPasteboard.general.string ?? UIPasteboard.general.url?.absoluteString
+        guard let raw, !raw.isEmpty else { return }
+        guard let extracted = LinkResolver.linkString(in: raw) else {
+            errorMessage = L("No link found in what you pasted.", "粘贴的内容里没有找到链接。")
+            return
+        }
+        link = extracted
         errorMessage = nil
-        hasClipboardLink = false
     }
 
     private func submit() {
         guard canSubmit else { return }
+        // Accept whole share blobs: keep only the link part before resolving.
+        if let extracted = LinkResolver.linkString(in: link) {
+            link = extracted
+        }
         isFieldFocused = false
         errorMessage = nil
         isResolving = true
@@ -310,8 +277,12 @@ struct HomeView: View {
         let input = link
         Task {
             do {
-                let media = try await LinkResolver().resolve(input: input)
-                preview = media
+                switch try await LinkResolver().resolveInput(input) {
+                case .media(let media):
+                    preview = media
+                case .podcast(let feed):
+                    podcast = feed
+                }
             } catch {
                 errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }

@@ -69,21 +69,27 @@ enum ResolveError: LocalizedError, Equatable {
     case emptyInput
     case invalidURL
     case noMediaFound
+    case unsupportedPlatform(String)
     case protectedStream(String)
     case network(String)
 
     var errorDescription: String? {
         switch self {
         case .emptyInput:
-            return "Paste a link first."
+            return L("Paste a link first.", "请先粘贴一个链接。")
         case .invalidURL:
-            return "That doesn't look like a valid link."
+            return L("That doesn't look like a valid link.", "这看起来不是一个有效的链接。")
         case .noMediaFound:
-            return "No downloadable video was found on that page. Try a direct link to an MP4 or an .m3u8 stream."
+            return L("We couldn't find a video on that page. Try a direct video link instead.",
+                     "这个页面里没有找到视频。换一个视频直链试试。")
+        case .unsupportedPlatform(let name):
+            return L("\(name) creates a temporary playback link that only works inside its own app, so FluxKit can't download it. Try a direct video link or another site.",
+                     "\(name)的播放地址是临时生成的，只能在它自己的 App 里播放，FluxKit 拿不到。换一个视频直链或其它网站试试。")
         case .protectedStream(let reason):
             return reason
-        case .network(let reason):
-            return "Network error: \(reason)"
+        case .network:
+            return L("Couldn't load that link. Check your connection and try again.",
+                     "链接打不开，请检查网络后重试。")
         }
     }
 }
@@ -111,8 +117,15 @@ struct DownloadRecord: Identifiable, Codable, Hashable, Sendable {
     /// File name inside the downloads directory.
     var fileName: String?
     var thumbnailName: String?
+    var thumbnailRemoteURL: URL?
+    var mimeType: String?
+    var httpHeaders: [String: String]?
     var createdAt: Date
     var duration: Double?
+    /// Playback position in seconds, persisted so a video/podcast resumes where it stopped.
+    var lastPosition: Double?
+    /// True once the item has been watched/listened to the end.
+    var played: Bool?
     var errorMessage: String?
 
     init(media: ResolvedMedia) {
@@ -124,6 +137,9 @@ struct DownloadRecord: Identifiable, Codable, Hashable, Sendable {
         self.state = .queued
         self.bytesReceived = 0
         self.bytesExpected = media.contentLength ?? 0
+        self.thumbnailRemoteURL = media.thumbnailURL
+        self.mimeType = media.mimeType
+        self.httpHeaders = media.httpHeaders.isEmpty ? nil : media.httpHeaders
         self.createdAt = Date()
     }
 
@@ -136,6 +152,15 @@ struct DownloadRecord: Identifiable, Codable, Hashable, Sendable {
     var isActive: Bool {
         state == .running || state == .queued || state == .paused
     }
+
+    /// 0…1 for the playback progress bar; 1 once the item has been played to the end.
+    var playbackProgress: Double {
+        if played == true { return 1 }
+        guard let duration, duration > 0, let lastPosition, lastPosition > 0 else { return 0 }
+        return min(max(lastPosition / duration, 0), 1)
+    }
+
+    var isPlayed: Bool { played == true && (lastPosition ?? 0) == 0 }
 }
 
 private extension String {

@@ -94,7 +94,7 @@ struct DownloadRow: View {
                 trailingControl
             }
 
-            if record.state == .running || record.state == .queued {
+            if record.state == .running || record.state == .queued || record.state == .paused {
                 ProgressView(value: max(record.progress, 0.02))
                     .progressViewStyle(.linear)
                     .tint(Theme.accent)
@@ -116,23 +116,29 @@ struct DownloadRow: View {
     private var statusText: String {
         switch record.state {
         case .queued:
-            return "Waiting to start"
+            return record.errorMessage ?? L("Waiting to start", "等待开始")
         case .running:
             if record.bytesExpected > 0 {
-                return "\(Int(record.progress * 100))% · \(Fmt.bytes(record.bytesReceived)) of \(Fmt.bytes(record.bytesExpected))"
+                return L("\(Int(record.progress * 100))% · \(Fmt.bytes(record.bytesReceived)) of \(Fmt.bytes(record.bytesExpected))",
+                         "\(Int(record.progress * 100))% · \(Fmt.bytes(record.bytesReceived)) / \(Fmt.bytes(record.bytesExpected))")
             }
-            return "Downloading · \(Fmt.bytes(record.bytesReceived))"
+            return L("Downloading · \(Fmt.bytes(record.bytesReceived))", "下载中 · \(Fmt.bytes(record.bytesReceived))")
         case .paused:
-            return "Paused"
+            return record.bytesReceived > 0
+                ? L("Paused · \(Fmt.bytes(record.bytesReceived))", "已暂停 · \(Fmt.bytes(record.bytesReceived))")
+                : L("Paused", "已暂停")
         case .finished:
             let duration = Fmt.duration(record.duration)
-            return duration.isEmpty
+            let base = duration.isEmpty
                 ? "\(Fmt.bytes(record.bytesReceived)) · \(Fmt.relative(record.createdAt))"
                 : "\(Fmt.bytes(record.bytesReceived)) · \(duration)"
+            if record.isPlayed { return base + " · " + L("Played", "已看完") }
+            if record.playbackProgress > 0.01 { return base + " · " + L("Resume", "继续") }
+            return base
         case .failed:
-            return record.errorMessage ?? "Failed"
+            return record.errorMessage ?? L("Failed", "失败")
         case .cancelled:
-            return "Cancelled"
+            return L("Cancelled", "已取消")
         }
     }
 

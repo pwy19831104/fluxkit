@@ -1,10 +1,15 @@
-name: StreamKit
+name: FluxKit
 options:
-  bundleIdPrefix: com.streamkit
+  bundleIdPrefix: cloud.streamkit
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
   groupSortPosition: top
+
+packages:
+  RevenueCat:
+    url: https://github.com/RevenueCat/purchases-ios.git
+    from: 5.102.0
 
 settings:
   base:
@@ -12,36 +17,55 @@ settings:
     MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "1"
     CODE_SIGN_STYLE: Automatic
+
+# MARK: - 只改这一行 ------------------------------------------------------------
+# 你的 10 位 Team ID（developer.apple.com/account → Membership details）。
+# 本项目的 Bundle ID / App Group(group.cloud.streamkit.app) / 描述文件都属于
+# Team H5YQ9HSATA；应用和 Share Extension 共用这一个 Team，改这里两边都生效。
+    DEVELOPMENT_TEAM: H5YQ9HSATA
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     SWIFT_EMIT_LOC_STRINGS: YES
 
 targets:
-  StreamKit:
+  FluxKit:
     type: application
     platform: iOS
     sources:
       - path: Sources
       - path: Shared
     dependencies:
-      - target: StreamKitShare
+      - target: FluxKitShare
+      - package: RevenueCat
+        product: RevenueCat
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.streamkit.app
-        PRODUCT_NAME: StreamKit
+        PRODUCT_BUNDLE_IDENTIFIER: cloud.streamkit.app
+        PRODUCT_NAME: FluxKit
         TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
-        INFOPLIST_KEY_CFBundleDisplayName: StreamKit
+        INFOPLIST_KEY_CFBundleDisplayName: FluxKit
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+      configs:
+        # RevenueCat public SDK keys (safe to ship — they are not secrets).
+        # Debug: Test Store key, purchases are simulated; lets you exercise the
+        # Paywall in the simulator without an App Store sandbox account.
+        Debug:
+          REVENUECAT_API_KEY: "test_WjmvaCEvytrrgYhzAleOBCjtFmA"
+        # Release: App Store key, real StoreKit purchases validated by RevenueCat.
+        Release:
+          REVENUECAT_API_KEY: "appl_itozUxxVurVFaVWfDpjnvwasyfD"
     entitlements:
-      path: Sources/StreamKit.entitlements
+      path: Sources/FluxKit.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.com.streamkit.app
+          - group.cloud.streamkit.app
     info:
       path: Sources/Info.plist
       properties:
-        CFBundleDisplayName: StreamKit
+        CFBundleDisplayName: FluxKit
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen:
           UIColorName: ""
         UISupportedInterfaceOrientations:
@@ -51,21 +75,32 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        NSPhotoLibraryAddUsageDescription: "StreamKit saves videos to your photo library only when you tap Save to Photos."
-        NSPhotoLibraryUsageDescription: "StreamKit needs access to save downloaded videos to your photo library."
+        NSPhotoLibraryAddUsageDescription: "FluxKit saves videos to your photo library only when you tap Save to Photos."
+        NSPhotoLibraryUsageDescription: "FluxKit needs access to save downloaded videos to your photo library."
         CFBundleURLTypes:
-          - CFBundleURLName: com.streamkit.app.link
+          - CFBundleURLName: cloud.streamkit.app.link
             CFBundleURLSchemes:
-              - streamkit
+              - fluxkit
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        # Substituted from the per-configuration build setting above:
+        # Debug → test_… (Test Store), Release → appl_… (App Store).
+        REVENUECAT_API_KEY: "$(REVENUECAT_API_KEY)"
+        # Legal links shown on the Paywall (App Review 3.1.2).
+        SKPrivacyPolicyURL: "https://openkit.cloud/privacy-policy"
+        SKTermsURL: "https://openkit.cloud/terms-of-service"
+        UIBackgroundModes:
+          - audio
         ITSAppUsesNonExemptEncryption: false
     scheme:
       testTargets:
-        - StreamKitTests
+        - FluxKitTests
+        - FluxKitUITests
       gatherCoverageData: true
 
-  StreamKitShare:
+  FluxKitShare:
     type: app-extension
     platform: iOS
     sources:
@@ -73,8 +108,8 @@ targets:
       - path: Shared
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.streamkit.app.share
-        PRODUCT_NAME: StreamKitShare
+        PRODUCT_BUNDLE_IDENTIFIER: cloud.streamkit.app.share
+        PRODUCT_NAME: FluxKitShare
         SKIP_INSTALL: YES
         APPLICATION_EXTENSION_API_ONLY: YES
         TARGETED_DEVICE_FAMILY: "1,2"
@@ -85,11 +120,13 @@ targets:
       path: ShareExtension/ShareExtension.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.com.streamkit.app
+          - group.cloud.streamkit.app
     info:
       path: ShareExtension/Info.plist
       properties:
-        CFBundleDisplayName: StreamKit
+        CFBundleDisplayName: FluxKit
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
@@ -99,16 +136,29 @@ targets:
               NSExtensionActivationSupportsWebPageWithMaxCount: 1
               NSExtensionActivationSupportsText: true
 
-  StreamKitTests:
+  FluxKitUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: FluxKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cloud.streamkit.app.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: FluxKit
+
+  FluxKitTests:
     type: bundle.unit-test
     platform: iOS
     sources:
       - path: Tests
     dependencies:
-      - target: StreamKit
+      - target: FluxKit
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.streamkit.app.tests
+        PRODUCT_BUNDLE_IDENTIFIER: cloud.streamkit.app.tests
         GENERATE_INFOPLIST_FILE: YES
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/StreamKit.app/StreamKit"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/FluxKit.app/FluxKit"
         BUNDLE_LOADER: "$(TEST_HOST)"

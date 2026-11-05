@@ -56,19 +56,20 @@ final class ShareViewController: UIViewController {
         iconView.contentMode = .scaleAspectFit
         iconView.translatesAutoresizingMaskIntoConstraints = false
 
-        titleLabel.text = "Saving link…"
+        titleLabel.text = L("Saving link…", "正在保存链接…")
         titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
         titleLabel.textColor = .white
         titleLabel.numberOfLines = 2
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        detailLabel.text = "StreamKit will start the download when you open the app."
+        detailLabel.text = L("FluxKit will start the download when you open the app.",
+                             "打开 FluxKit 后就会开始下载。")
         detailLabel.font = .systemFont(ofSize: 13.5, weight: .regular)
         detailLabel.textColor = UIColor(white: 0.68, alpha: 1)
         detailLabel.numberOfLines = 3
         detailLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        openButton.setTitle("Open StreamKit", for: .normal)
+        openButton.setTitle(L("Open FluxKit", "打开 FluxKit"), for: .normal)
         openButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         openButton.setTitleColor(.black, for: .normal)
         openButton.backgroundColor = accent
@@ -78,7 +79,7 @@ final class ShareViewController: UIViewController {
         openButton.addTarget(self, action: #selector(openApp), for: .touchUpInside)
         openButton.isHidden = true
 
-        doneButton.setTitle("Done", for: .normal)
+        doneButton.setTitle(L("Done", "完成"), for: .normal)
         doneButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
         doneButton.setTitleColor(UIColor(white: 0.7, alpha: 1), for: .normal)
         doneButton.translatesAutoresizingMaskIntoConstraints = false
@@ -125,9 +126,10 @@ final class ShareViewController: UIViewController {
 
     private func showSuccess(link: String) {
         spinner.stopAnimating()
-        titleLabel.text = "Link saved"
+        titleLabel.text = L("Link saved", "链接已保存")
         let host = URL(string: link)?.host?.replacingOccurrences(of: "www.", with: "") ?? link
-        detailLabel.text = "\(host)\nOpen StreamKit to start the download."
+        detailLabel.text = L("\(host)\nOpen FluxKit to start the download.",
+                             "\(host)\n打开 FluxKit 开始下载。")
         openButton.isHidden = false
         doneButton.isHidden = false
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -135,19 +137,21 @@ final class ShareViewController: UIViewController {
 
     private func showFailure() {
         spinner.stopAnimating()
-        titleLabel.text = "No link found"
-        detailLabel.text = "Share a video link, or paste it directly in StreamKit."
+        titleLabel.text = L("No link found", "没有找到链接")
+        detailLabel.text = L("Share a video link, or paste it directly in FluxKit.",
+                             "请分享视频链接，或直接在 FluxKit 里粘贴。")
         doneButton.isHidden = false
     }
 
     // MARK: - Actions
 
     @objc private func openApp() {
-        guard let url = URL(string: "streamkit://") else { return }
+        guard let url = URL(string: "fluxkit://") else { return }
         extensionContext?.open(url) { [weak self] opened in
             DispatchQueue.main.async {
                 if !opened {
-                    self?.detailLabel.text = "Link saved. Open StreamKit from your Home Screen to start the download."
+                    self?.detailLabel.text = L("Link saved. Open FluxKit from your Home Screen to start the download.",
+                                               "链接已保存。请从主屏幕打开 FluxKit 开始下载。")
                     self?.openButton.isHidden = true
                 } else {
                     self?.extensionContext?.completeRequest(returningItems: nil)
@@ -200,18 +204,12 @@ final class ShareViewController: UIViewController {
     }
 
     private static func normalized(_ raw: String) -> String? {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        if let url = URL(string: trimmed), url.scheme != nil { return trimmed }
-        return firstLink(in: trimmed) ?? trimmed
+        // Share items are sometimes a whole blurb; keep only the link.
+        LinkTextExtractor.firstLink(in: raw)
     }
 
     private static func firstLink(in text: String?) -> String? {
         guard let text, !text.isEmpty else { return nil }
-        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
-            return nil
-        }
-        let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        return detector.firstMatch(in: text, options: [], range: range)?.url?.absoluteString
+        return LinkTextExtractor.firstLink(in: text)
     }
 }

@@ -45,6 +45,7 @@ enum Fmt {
 
     static func relative(_ date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
+        formatter.locale = AppLanguage.current.locale
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: date, relativeTo: Date())
     }

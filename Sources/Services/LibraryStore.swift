@@ -77,6 +77,9 @@ final class LibraryStore {
         if let name = record.thumbnailName {
             try? FileManager.default.removeItem(at: AppPaths.thumbnailURL(fileName: name))
         }
+        try? FileManager.default.removeItem(at: AppPaths.resumeDataURL(recordID: record.id))
+        AppPaths.removeHLSWork(recordID: record.id)
+        AppPaths.removeSubtitles(recordID: record.id)
         records.removeAll { $0.id == id }
         scheduleSave()
     }
