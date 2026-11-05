@@ -7,6 +7,8 @@ import Foundation
 /// 2. HLS playlists (`.m3u8`) — handed to the HLS downloader.
 /// 3. HTML pages — inspected for `og:video`, `twitter:player:stream`, `<video>`,
 ///    `<source>` and JSON-LD `contentUrl` candidates.
+/// 4. Client-rendered players (see `SiteExtractor`) — the page has no media element at
+///    all, so the address is read from the site's own JSON endpoint instead.
 struct LinkResolver {
 
     static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
@@ -58,6 +60,12 @@ struct LinkResolver {
     }
 
     private func resolveInput(url: URL) async throws -> ResolvedInput {
+        // Sites with a JavaScript player: the HTML is a skeleton, so skip straight to
+        // their JSON endpoint.
+        if let extraction = try await SiteExtractor.extract(from: url, session: session) {
+            return .media(try await media(for: extraction, pageURL: url))
+        }
+
         let probe = try await probeURL(url)
 
         // A file or HLS playlist: nothing else to do.
@@ -194,6 +202,26 @@ struct LinkResolver {
             thumbnailURL: Self.thumbnailURL(in: html, base: page.url),
             pageURL: probe.url,
             httpHeaders: Self.refererHeaders(for: probe.url)
+        )
+    }
+
+    /// Wraps an address handed over by a `SiteExtractor` the way the scraper does:
+    /// probe for the real content type/size and keep the page as `Referer`.
+    private func media(for extraction: SiteExtractor.Extraction, pageURL: URL) async throws -> ResolvedMedia {
+        let probe = try? await probeURL(extraction.url)
+        let resolvedURL = probe?.url ?? extraction.url
+        let contentType = extraction.mimeType ?? probe?.contentType
+        let kind = Self.mediaKind(for: contentType, url: resolvedURL)
+            ?? (Self.looksLikePlaylist(resolvedURL) ? .hls : .progressive)
+        return ResolvedMedia(
+            kind: kind,
+            url: resolvedURL,
+            title: extraction.title ?? Self.title(from: resolvedURL),
+            mimeType: contentType,
+            contentLength: kind == .hls ? nil : (extraction.contentLength ?? probe?.contentLength),
+            thumbnailURL: extraction.thumbnailURL,
+            pageURL: pageURL,
+            httpHeaders: Self.refererHeaders(for: pageURL)
         )
     }
 

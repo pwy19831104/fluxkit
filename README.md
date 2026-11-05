@@ -76,8 +76,9 @@ See [`docs/POSITIONING.md`](docs/POSITIONING.md) for the rationale and ASO plan,
 ## Supported links (and why some are blocked)
 
 **Works:** direct media links (`mp4`, `mov`, `webm`, `m4a`, `mp3`, …), HLS playlists (`.m3u8`),
-podcast RSS/Atom feeds, and public web pages that expose `og:video`, `<video>`, `<source>` or
-JSON-LD `contentUrl`.
+podcast RSS/Atom feeds, public web pages that expose `og:video`, `<video>`, `<source>` or
+JSON-LD `contentUrl`, and 好看视频 / [haokan.baidu.com](https://haokan.baidu.com) links
+(`https://haokan.baidu.com/v?vid=…`) — see *Client-rendered players* below.
 
 **Blocked on purpose:** Douyin, TikTok, YouTube, Instagram, Facebook, X, Kuaishou, Xiaohongshu,
 Bilibili, Netflix. These services hand out short-lived, signed playback URLs through an API that
@@ -86,6 +87,30 @@ link before downloading, so it fails fast with a clear message instead of saving
 Supporting them would require a server-side extractor (and rewriting their request signatures),
 which is out of scope and breaks whenever they change the API. See
 [`docs/FAQ.md`](docs/FAQ.md).
+
+### Client-rendered players
+
+Some pages contain no media element at all: they ship a skeleton (`ssr-skeleton`) and the
+`<video class="art-video" src="…">` tag is injected by JavaScript, together with a
+freshly-signed, short-lived address. 好看视频 is one of them — `curl` on
+`https://haokan.baidu.com/v?vid=…` returns no `.mp4` anywhere in the HTML.
+
+`SiteExtractor` handles those: for a known host it skips the scraper and reads the address the
+player itself uses. Haokan's player calls `GET /v?vid=<vid>&_format=json` (the same route that
+serves the page) and takes `data.apiData.curVideoMeta.clarityUrl[*].url` — the exact string a
+user sees on the page's `<video>` element. The extractor picks the largest rendition
+(`videoSize`), falls back to `playurl` and then `previewUrlHttp`, and keeps the page as
+`Referer`. Adding another such site means one small case in `SiteExtractor.swift`; every
+unknown host still goes through the generic scraper.
+
+Because those addresses are signed, they stop working after about 15 minutes — which is what a
+long pause looks like. `DownloadManager` treats a refused address (401/403/404/410/412/416, or
+`NSURLErrorBadServerResponse`) as "the token lapsed": it re-resolves `sourceURL` through
+`LinkResolver` (so the page link gets a freshly signed address), drops the now-worthless resume
+data and restarts the transfer. A direct `.mp4` you pasted yourself has no page to re-resolve, so
+that one fails with a plain message instead of a pointless retry. Re-resolving is rate-limited
+(`sourceRefreshCooldown`) so a server that keeps refusing can't turn into a loop; tapping retry in
+the UI clears that limit because the user — not the app — asked again.
 
 ## Language
 
@@ -140,16 +165,18 @@ It should print `TeamIdentifier=H5YQ9HSATA`.
 Archive and export an App Store build:
 
 ```bash
-xcodebuild -project FluxKit.xcodeproj -scheme FluxKit -configuration Release \
-  -destination 'generic/platform=iOS' -archivePath build/FluxKit.xcarchive \
-  archive -allowProvisioningUpdates
-
-xcodebuild -exportArchive -archivePath build/FluxKit.xcarchive \
-  -exportPath build/export -exportOptionsPlist ExportOptions.plist \
-  -allowProvisioningUpdates
+make archive        # archives into Xcode's archive folder → visible in Organizer
+make open-archive   # opens the newest archive in Organizer
 ```
 
-`build/export/FluxKit.ipa` is then ready for Transporter / App Store Connect.
+`make archive` writes to `~/Library/Developer/Xcode/Archives/<date>/`, so the build shows up in
+**Window → Organizer** and can be uploaded with **Distribute App**. For a CI-style run that keeps
+the artifact inside the repo, use the fixed-path variant:
+
+```bash
+make archive-file   # -> build/FluxKit.xcarchive
+make export         # -> build/export/FluxKit.ipa (Transporter / App Store Connect)
+```
 
 ## Run it
 
@@ -175,6 +202,8 @@ extension, embedded in `PlugIns/`).
 
 ```
 input ──► normalize (https://, validation)
+          │
+          ├─ known site (SiteExtractor) ──► JSON endpoint ──► probe ──► media
           │
           ├─ HEAD / ranged GET probe ──► video/*, audio/*  ──► progressive download
           │                          └─ mpegurl / .m3u8 ──► HLS pipeline
@@ -228,6 +257,11 @@ SIMCTL_CHILD_SMOKE_URLS="https://example.com/a.mp4" \
 
 # Same, but pause after 3 s and resume 1.5 s later (exercises resume data)
 SIMCTL_CHILD_SMOKE_PAUSE=1 SIMCTL_CHILD_SMOKE_URLS="…" \
+  xcrun simctl launch booted cloud.fluxkit.app --smoke-test
+
+# Resolve, then break the media address before downloading: the manager must notice the
+# rejection, re-resolve the page and still finish (exercises the lapsed-link recovery)
+SIMCTL_CHILD_SMOKE_STALE_URL=1 SIMCTL_CHILD_SMOKE_URLS="https://haokan.baidu.com/v?vid=…" \
   xcrun simctl launch booted cloud.fluxkit.app --smoke-test
 
 # Simulate the share extension writing into the App Group

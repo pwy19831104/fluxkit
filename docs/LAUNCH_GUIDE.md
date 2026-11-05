@@ -276,14 +276,19 @@ RevenueCat 项目设置 → **App Store Server Notifications**：
 ## 1. 归档
 
 ```bash
-cd fluxkit-ios   # 仓库目录；如果你的文件夹已改名，用你本地的名字
-xcodegen generate
-xcodebuild -project FluxKit.xcodeproj -scheme FluxKit \
-  -configuration Release -destination 'generic/platform=iOS' \
-  -archivePath build/FluxKit.xcarchive archive -allowProvisioningUpdates
+cd fluxkit-ios        # 仓库目录
+make clean            # 清掉旧构建
+make archive          # 归档到 Xcode 的 Archives 目录（Organizer 可见）
+make open-archive     # 需要时直接打开最新归档
 ```
 
-> 需要 Xcode 已登录 `H5YQ9HSATA` 对应的 Apple ID，并生成/下载 Distribution 证书。
+`make archive` 会归档到 `~/Library/Developer/Xcode/Archives/<日期>/`，因此
+**Xcode → Window → Organizer** 列表里能直接看到。想要固定在仓库内路径（CI 用），跑 `make archive-file`
+（产物 `build/FluxKit.xcarchive`）。
+
+> 前提：Xcode 已登录 `H5YQ9HSATA` 的 Apple ID，并且有 **Apple Distribution** 证书
+> （Xcode → Settings → Accounts → Manage Certificates → ＋ → Apple Distribution）。
+> 只有 Apple Development 证书时归档仍会成功，但签的是开发证书，上传前会被要求重新签名。
 
 ## 2. 上传
 

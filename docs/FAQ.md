@@ -24,6 +24,9 @@ HTML page and failing later.
 - An **HLS playlist** (`.m3u8`), including playlists behind a normal HTTP link.
 - A **public web page** that embeds a video with `og:video`, a `<video>` tag, `<source>` or JSON-LD
   `contentUrl` — the app fetches the page and picks the media URL out of it.
+- A **好看视频 link** (`https://haokan.baidu.com/v?vid=…`). That page has no `<video>` in its HTML
+  at all — the player builds it with JavaScript — so the app asks the site's own JSON endpoint for
+  the address the player would use, and downloads the highest rendition it offers.
 - A **podcast RSS/Atom feed** — the app lists episodes with date, duration and size, and downloads
   the enclosure URL you pick.
 

@@ -23,6 +23,12 @@ final class DownloadManager: NSObject {
     private var pending: [UUID] = []
     private let registry = TaskRegistry()
     private var networkObserver: NSObjectProtocol?
+    /// When each record last had its media address re-resolved, so a server that keeps
+    /// rejecting one cannot turn into a re-resolve loop.
+    private var lastSourceRefresh: [UUID: Date] = [:]
+
+    /// Minimum gap between automatic re-resolves for one record.
+    static let sourceRefreshCooldown: TimeInterval = 60
 
     private override init() {
         super.init()
@@ -58,6 +64,8 @@ final class DownloadManager: NSObject {
     func retry(_ record: DownloadRecord) {
         discardResumeData(recordID: record.id)
         AppPaths.removeHLSWork(recordID: record.id)
+        // An explicit retry is a fresh start, so it may re-resolve the page immediately.
+        lastSourceRefresh[record.id] = nil
         var refreshed = record
         refreshed.state = .queued
         refreshed.bytesReceived = 0
@@ -79,6 +87,7 @@ final class DownloadManager: NSObject {
             retry(record)
             return
         }
+        lastSourceRefresh[record.id] = nil
         library.update(record.id) { item in
             item.state = .queued
             item.errorMessage = nil
@@ -295,6 +304,7 @@ final class DownloadManager: NSObject {
         hlsTasks[recordID] = nil
         activeTasks[recordID] = nil
         pending.removeAll { $0 == recordID }
+        lastSourceRefresh[recordID] = nil
         discardResumeData(recordID: recordID)
         AppPaths.removeHLSWork(recordID: recordID)
 
@@ -354,6 +364,122 @@ final class DownloadManager: NSObject {
             record.errorMessage = message
         }
         pump()
+    }
+
+    // MARK: - Lapsed media addresses
+
+    /// Signed playback addresses (see `SiteExtractor`) stop working after a few minutes — which
+    /// is exactly what a long pause looks like. The *page* link those addresses came from still
+    /// resolves, so instead of failing the download the manager asks `LinkResolver` for a fresh
+    /// address and starts the transfer over.
+
+    /// Status codes that mean "this address is no longer good for you": the token lapsed
+    /// (401/403/451), the object is gone (404/410), or the range we asked for no longer fits
+    /// (412/416, typical when stale resume data is replayed against a re-signed URL).
+    nonisolated static let rejectedStatusCodes: Set<Int> = [401, 403, 404, 410, 412, 416, 451]
+
+    /// - Returns: `true` when re-resolving makes sense: the record was scraped from a page
+    ///   (so `sourceURL` is not the media address itself), we're online, and the previous
+    ///   attempt is older than `sourceRefreshCooldown`.
+    nonisolated static func canRefreshSource(for record: DownloadRecord,
+                                             lastRefresh: Date?,
+                                             isOnline: Bool,
+                                             now: Date = Date()) -> Bool {
+        guard record.kind == .progressive else { return false }
+        guard record.sourceURL != record.remoteURL else { return false }
+        guard isOnline else { return false }
+        if let lastRefresh, now.timeIntervalSince(lastRefresh) < sourceRefreshCooldown { return false }
+        return true
+    }
+
+    /// - Returns: `true` when the transfer was restarted with a new address.
+    private func recoverFromRejectedURL(recordID: UUID) async -> Bool {
+        guard let record = library.record(id: recordID),
+              // Never resurrect a transfer the user paused or cancelled in the meantime.
+              record.state == .running || record.state == .queued,
+              Self.canRefreshSource(for: record,
+                                    lastRefresh: lastSourceRefresh[recordID],
+                                    isOnline: network.isConnected) else {
+            return false
+        }
+
+        lastSourceRefresh[recordID] = Date()
+        #if DEBUG
+        NSLog("REFRESH: re-resolving \(record.sourceURL.absoluteString) for \(recordID.uuidString.prefix(8))")
+        #endif
+
+        let media: ResolvedMedia
+        do {
+            media = try await LinkResolver().resolve(input: record.sourceURL.absoluteString)
+        } catch {
+            #if DEBUG
+            NSLog("REFRESH: failed — \(error.localizedDescription)")
+            #endif
+            return false
+        }
+
+        // Unchanged address means the site is not handing out a new one; retrying would just
+        // hit the same wall, so let the caller report the failure.
+        guard media.url != record.remoteURL else { return false }
+
+        // Resume data is bound to the old request, so it would replay the dead address forever.
+        discardResumeData(recordID: recordID)
+        library.update(recordID) { item in
+            item.remoteURL = media.url
+            if let mime = media.mimeType { item.mimeType = mime }
+            if !media.httpHeaders.isEmpty { item.httpHeaders = media.httpHeaders }
+            if let thumbnail = media.thumbnailURL { item.thumbnailRemoteURL = thumbnail }
+            if let length = media.contentLength, length > 0 { item.bytesExpected = length }
+            item.bytesReceived = 0
+            item.state = .queued
+            item.errorMessage = nil
+        }
+        enqueue(recordID)
+        return true
+    }
+
+    /// A response the server refused. The body it came with is an error page, never the video,
+    /// so it is thrown away instead of being saved as if the download had succeeded.
+    private func handleRejectedResponse(recordID: UUID, status: Int) async {
+        activeTasks[recordID] = nil
+        pending.removeAll { $0 == recordID }
+        #if DEBUG
+        NSLog("REFRESH: transfer rejected (HTTP \(status)) for \(recordID.uuidString.prefix(8))")
+        #endif
+        if await recoverFromRejectedURL(recordID: recordID) { return }
+        fail(recordID: recordID, message: Self.message(forRejectedStatus: status))
+    }
+
+    /// The message the user sees when the transfer was refused and no fresh address could be
+    /// fetched — status-specific, because "the link expired" is wrong for a deleted file.
+    nonisolated static func message(forRejectedStatus status: Int) -> String {
+        switch status {
+        case 404, 410:
+            return L("The server no longer has that file.", "服务器上已经没有这个文件了。")
+        case 412, 416:
+            return L("The server couldn't continue this download. Tap retry to start over.",
+                     "服务器无法继续这个下载。点重试重新开始。")
+        default:
+            return expiredLinkMessage
+        }
+    }
+
+    nonisolated private static var expiredLinkMessage: String {
+        L("The site's playback link had expired and a new one couldn't be fetched. Paste the page link again to refresh it.",
+          "网站的播放地址已过期，暂时没能换到新的。重新粘贴一遍页面链接就能刷新。")
+    }
+
+    /// `NSURLErrorBadServerResponse` is how a rejected signed address surfaces when the system
+    /// fails the task instead of handing over the body (`didFinishDownloadingTo` covers the rest).
+    nonisolated static func isRejectedAddress(_ error: NSError) -> Bool {
+        error.domain == NSURLErrorDomain && error.code == NSURLErrorBadServerResponse
+    }
+
+    /// Logged for the debug harness; kept separate so the delegate code stays readable.
+    nonisolated static func rejectionStatus(from response: URLResponse?) -> Int? {
+        guard let http = response as? HTTPURLResponse else { return nil }
+        guard !(200..<300).contains(http.statusCode) else { return nil }
+        return http.statusCode
     }
 
     // MARK: - Reconciliation
@@ -480,6 +606,23 @@ extension DownloadManager: URLSessionDownloadDelegate {
                                 didFinishDownloadingTo location: URL) {
         guard let entry = Self.entry(for: downloadTask) else { return }
 
+        // A task that was already replaced (the media address was re-resolved) must not write
+        // over the file the current task is producing.
+        guard registry.isCurrent(taskID: downloadTask.taskIdentifier, recordID: entry.recordID) else {
+            try? FileManager.default.removeItem(at: location)
+            return
+        }
+
+        // A download task saves whatever the server sent, including the error page for a
+        // rejected signed address. Check the status before treating the file as the video.
+        if let status = Self.rejectionStatus(from: downloadTask.response) {
+            try? FileManager.default.removeItem(at: location)
+            Task { @MainActor [weak self] in
+                await self?.handleRejectedResponse(recordID: entry.recordID, status: status)
+            }
+            return
+        }
+
         let fileName = "\(entry.recordID.uuidString).\(entry.fileExtension)"
         let destination = AppPaths.mediaURL(fileName: fileName)
         try? FileManager.default.removeItem(at: destination)
@@ -522,16 +665,37 @@ extension DownloadManager: URLSessionDownloadDelegate {
             return
         }
 
+        // A replaced task's failure says nothing about the transfer that took over, so it must
+        // not pause or fail the record — the current task is still running.
+        guard registry.isCurrent(taskID: task.taskIdentifier, recordID: entry.recordID) else {
+            #if DEBUG
+            NSLog("Stale task \(task.taskIdentifier) finished for \(entry.recordID.uuidString.prefix(8)); ignoring")
+            #endif
+            return
+        }
+
         if let resumeData {
             try? resumeData.write(to: AppPaths.resumeDataURL(recordID: entry.recordID), options: .atomic)
-            Task { @MainActor [weak self] in
-                self?.markPaused(recordID: entry.recordID,
-                                 message: L("Connection lost. Tap resume to continue.",
-                                            "连接中断。点继续接着下载。"))
-            }
-        } else {
-            Task { @MainActor [weak self] in
-                self?.fail(recordID: entry.recordID, message: Self.readableMessage(for: nsError))
+        }
+
+        let rejected = Self.isRejectedAddress(nsError)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            // The task is gone either way; holding on to it would keep the queue from
+            // starting the replacement below.
+            self.activeTasks[entry.recordID] = nil
+            // A lapsed signed address: re-resolve the page before deciding anything else,
+            // because the resume data it came with points at the dead URL too.
+            if rejected, await self.recoverFromRejectedURL(recordID: entry.recordID) { return }
+
+            if resumeData != nil {
+                self.markPaused(recordID: entry.recordID,
+                                message: rejected
+                                    ? Self.expiredLinkMessage
+                                    : L("Connection lost. Tap resume to continue.",
+                                        "连接中断。点继续接着下载。"))
+            } else {
+                self.fail(recordID: entry.recordID, message: Self.readableMessage(for: nsError))
             }
         }
     }
@@ -591,11 +755,16 @@ final class TaskRegistry: @unchecked Sendable {
     }
 
     private var entries: [Int: Entry] = [:]
+    /// The task currently responsible for a record. A transfer can be replaced mid-flight
+    /// (a lapsed media address is re-resolved and restarted), and the replaced task's
+    /// delegate callbacks still arrive.
+    private var current: [UUID: Int] = [:]
     private let lock = NSLock()
 
     func register(_ entry: Entry, for taskID: Int) {
         lock.lock(); defer { lock.unlock() }
         entries[taskID] = entry
+        current[entry.recordID] = taskID
     }
 
     func entry(for taskID: Int) -> Entry? {
@@ -606,5 +775,17 @@ final class TaskRegistry: @unchecked Sendable {
     func remove(_ taskID: Int) {
         lock.lock(); defer { lock.unlock() }
         entries[taskID] = nil
+        for (recordID, active) in current where active == taskID {
+            current[recordID] = nil
+        }
+    }
+
+    /// `false` when `taskID` was already replaced by a newer task for the same record, in
+    /// which case its callbacks must not touch the record or its files. Unknown tasks are
+    /// treated as current so a re-delivered session task keeps working.
+    func isCurrent(taskID: Int, recordID: UUID) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard entries[taskID] != nil else { return true }
+        return current[recordID] == taskID
     }
 }
