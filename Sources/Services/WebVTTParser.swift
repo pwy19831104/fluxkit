@@ -47,18 +47,29 @@ enum WebVTTParser {
         return cues
     }
 
-    /// Reads `X-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:900000` (used per HLS segment).
+    /// Reads `X-TIMESTAMP-MAP=` (used per HLS segment).
+    ///
+    /// The two keys can appear in either order. Apple's own example stream ships
+    /// `X-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000`, so parsing must not assume the
+    /// `LOCAL:` first order shown in the RFC 8216 example — reading the text *between* the two
+    /// markers crashed with an invalid `Range` (and took the whole HLS job down) when they were
+    /// reversed.
     static func timestampMapOffset(in text: String) -> Double? {
-        guard let localRange = text.range(of: "X-TIMESTAMP-MAP=") else { return nil }
-        let header = text[localRange.upperBound...].prefix(200)
-        guard let localPart = header.range(of: "LOCAL:"),
-              let mpegPart = header.range(of: "MPEGTS:") else { return nil }
+        guard let mapRange = text.range(of: "X-TIMESTAMP-MAP=") else { return nil }
+        let header = text[mapRange.upperBound...].prefix(200)
 
-        let localText = header[localPart.upperBound..<mpegPart.lowerBound]
-            .trimmingCharacters(in: CharacterSet(charactersIn: ", \n"))
-        let mpegText = header[mpegPart.upperBound...]
-            .prefix { $0.isNumber }
-        guard let local = parseTimestamp(localText), let mpeg = Double(mpegText) else { return nil }
+        /// Value of `marker` up to the next separator (comma / newline / end of header).
+        func value(after marker: String) -> String? {
+            guard let range = header.range(of: marker) else { return nil }
+            return header[range.upperBound...]
+                .prefix { $0 != "," && $0 != "\n" && $0 != "\r" }
+                .trimmingCharacters(in: .whitespaces)
+        }
+
+        guard let localText = value(after: "LOCAL:"),
+              let mpegText = value(after: "MPEGTS:"),
+              let local = parseTimestamp(localText),
+              let mpeg = Double(mpegText) else { return nil }
         return (mpeg / 90_000) - local
     }
 
