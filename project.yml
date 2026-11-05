@@ -41,7 +41,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: cloud.streamkit.app
         PRODUCT_NAME: FluxKit
-        TARGETED_DEVICE_FAMILY: "1,2"
+        TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
         INFOPLIST_KEY_CFBundleDisplayName: FluxKit
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -70,11 +70,6 @@ targets:
           UIColorName: ""
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-        UISupportedInterfaceOrientations~ipad:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationPortraitUpsideDown
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
         NSPhotoLibraryAddUsageDescription: "FluxKit saves videos to your photo library only when you tap Save to Photos."
         NSPhotoLibraryUsageDescription: "FluxKit needs access to save downloaded videos to your photo library."
         CFBundleURLTypes:
@@ -112,7 +107,7 @@ targets:
         PRODUCT_NAME: FluxKitShare
         SKIP_INSTALL: YES
         APPLICATION_EXTENSION_API_ONLY: YES
-        TARGETED_DEVICE_FAMILY: "1,2"
+        TARGETED_DEVICE_FAMILY: "1"
       configs:
         Release:
           SWIFT_COMPILATION_MODE: wholemodule
