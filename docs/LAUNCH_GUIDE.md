@@ -2,7 +2,7 @@
 
 > 适用版本：2025/2026 的 App Store Connect 与 RevenueCat 控制台。
 > 界面文案可能随 Apple/RevenueCat 更新略有变化，但入口和字段基本一致。
-> 本文默认：App 名称 `FluxKit`，Bundle ID `cloud.streamkit.app`，Team `H5YQ9HSATA`。
+> 本文默认：App 名称 `FluxKit`，Bundle ID `cloud.fluxkit.app`，Team `H5YQ9HSATA`。
 
 ---
 
@@ -32,15 +32,15 @@
 2. 选 **App IDs** → **App** → Continue。
 3. 填写：
    - Description：`FluxKit`
-   - Bundle ID：**Explicit**，填 `cloud.streamkit.app`
+   - Bundle ID：**Explicit**，填 `cloud.fluxkit.app`
 4. Capabilities 勾选：
    - **App Groups**（重要，分享扩展要用）
    - 其它保持默认
 5. Continue → Register。
 6. 再注册分享扩展的 Bundle ID：
-   - `cloud.streamkit.app.share`（同样勾 App Groups）
+   - `cloud.fluxkit.app.share`（同样勾 App Groups）
 7. 左侧 **Identifiers → App Groups** → **＋**：
-   - Identifier：`group.cloud.streamkit.app`
+   - Identifier：`group.cloud.fluxkit.app`
    - 注册后回到两个 App ID，把该 App Group 勾上并 Save。
 
 > Xcode 自动签名通常也会帮你创建这些，但提前建好更稳。
@@ -70,7 +70,7 @@
 | Platform | iOS |
 | Name | `FluxKit: HLS & Podcast Saver`（≤30 字符） |
 | Primary Language | English (U.S.) |
-| Bundle ID | `cloud.streamkit.app` |
+| Bundle ID | `cloud.fluxkit.app` |
 | SKU | `fluxkit-ios-001`（自己记好，唯一即可） |
 | User Access | Full Access |
 
@@ -187,7 +187,7 @@ RevenueCat → **Projects** → **＋ New Project**：
 |---|---|
 | App name | `FluxKit` |
 | Platform | **App Store** |
-| Bundle ID | `cloud.streamkit.app` |
+| Bundle ID | `cloud.fluxkit.app` |
 | App Store Connect API Key | 填第一部分生成的 **Issuer ID / Key ID / .p8** |
 
 保存后 RevenueCat 会尝试连接 App Store Connect；连接成功会显示绿色状态。
@@ -276,7 +276,7 @@ RevenueCat 项目设置 → **App Store Server Notifications**：
 ## 1. 归档
 
 ```bash
-cd streamkit-ios   # 仓库目录；如果你的文件夹已改名，用你本地的名字
+cd fluxkit-ios   # 仓库目录；如果你的文件夹已改名，用你本地的名字
 xcodegen generate
 xcodebuild -project FluxKit.xcodeproj -scheme FluxKit \
   -configuration Release -destination 'generic/platform=iOS' \

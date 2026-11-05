@@ -18,7 +18,7 @@ entitlement 同步、跨设备恢复和 Offering 管理。App 内不保存任何
 
 ## 2. RevenueCat：项目与 Offering
 
-1. 新建 Project → 添加 iOS App，Bundle ID 填 `cloud.streamkit.app`。
+1. 新建 Project → 添加 iOS App，Bundle ID 填 `cloud.fluxkit.app`。
 2. 在 App 设置里填入 App Store Connect 的共享密钥/API Key。
 3. **Products**：导入上面两个商品。
 4. **Entitlements**：新建 entitlement，identifier 必须是 **`pro`**

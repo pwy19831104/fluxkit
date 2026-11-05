@@ -107,7 +107,7 @@ region gets English. The globe button on the home screen switches between **Engl
 
 - Xcode 26 or newer, iOS 17+ deployment target
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`) — the project file is generated
-- An App Group named `group.cloud.streamkit.app` registered for both bundle ids when you build for a device
+- An App Group named `group.cloud.fluxkit.app` registered for both bundle ids when you build for a device
 
 ## Signing
 
@@ -117,14 +117,14 @@ region gets English. The globe button on the home screen switches between **Engl
 DEVELOPMENT_TEAM: H5YQ9HSATA
 ```
 
-That team already owns `cloud.streamkit.app`, `cloud.streamkit.app.share` and
-`group.cloud.streamkit.app`. If you publish under a different team:
+That team already owns `cloud.fluxkit.app`, `cloud.fluxkit.app.share` and
+`group.cloud.fluxkit.app`. If you publish under a different team:
 
 1. Change the one `DEVELOPMENT_TEAM` line in `project.yml`.
 2. Regenerate the project: `xcodegen generate` (XcodeGen owns the `.xcodeproj`, so
    picking a team in Xcode's Signing editor is overwritten on the next generate).
 3. In the developer portal, make sure both App IDs have the **App Groups** capability
-   with `group.cloud.streamkit.app`, and that your account is signed into
+   with `group.cloud.fluxkit.app`, and that your account is signed into
    Xcode → Settings → Accounts.
 4. Build once with `xcodebuild ... -allowProvisioningUpdates` or with Xcode open so the
    development profiles get refreshed.
@@ -224,20 +224,20 @@ project.yml   XcodeGen spec (Info.plists + entitlements are generated from it)
 ```bash
 # Resolve + download a list of links, logging outcomes to the unified log
 SIMCTL_CHILD_SMOKE_URLS="https://example.com/a.mp4" \
-  xcrun simctl launch --console booted cloud.streamkit.app --smoke-test
+  xcrun simctl launch --console booted cloud.fluxkit.app --smoke-test
 
 # Same, but pause after 3 s and resume 1.5 s later (exercises resume data)
 SIMCTL_CHILD_SMOKE_PAUSE=1 SIMCTL_CHILD_SMOKE_URLS="…" \
-  xcrun simctl launch booted cloud.streamkit.app --smoke-test
+  xcrun simctl launch booted cloud.fluxkit.app --smoke-test
 
 # Simulate the share extension writing into the App Group
-SIMCTL_CHILD_INBOX_PUSH="https://example.com/page" xcrun simctl launch booted cloud.streamkit.app
+SIMCTL_CHILD_INBOX_PUSH="https://example.com/page" xcrun simctl launch booted cloud.fluxkit.app
 
 # Pre-fill the field and open the preview sheet / start on a tab
-SIMCTL_CHILD_PREVIEW_URL="…" SIMCTL_CHILD_SHOW_TAB=library xcrun simctl launch booted cloud.streamkit.app
+SIMCTL_CHILD_PREVIEW_URL="…" SIMCTL_CHILD_SHOW_TAB=library xcrun simctl launch booted cloud.fluxkit.app
 
 # Flip the in-app language switch (persisted, same path as the globe menu)
-SIMCTL_CHILD_SET_LANGUAGE=zh-Hans xcrun simctl launch booted cloud.streamkit.app
+SIMCTL_CHILD_SET_LANGUAGE=zh-Hans xcrun simctl launch booted cloud.fluxkit.app
 ```
 
 ## Scope and limitations
@@ -257,8 +257,8 @@ SIMCTL_CHILD_SET_LANGUAGE=zh-Hans xcrun simctl launch booted cloud.streamkit.app
 
 ## Before shipping to the App Store
 
-- Bundle ids are `cloud.streamkit.app` (app), `cloud.streamkit.app.share` (extension) and
-  `cloud.streamkit.app.tests`. The App Group `group.cloud.streamkit.app` and the team are already
+- Bundle ids are `cloud.fluxkit.app` (app), `cloud.fluxkit.app.share` (extension) and
+  `cloud.fluxkit.app.tests`. The App Group `group.cloud.fluxkit.app` and the team are already
   wired up in `project.yml` (`DEVELOPMENT_TEAM: H5YQ9HSATA`); change that one line if you publish
   under another team.
 - App icon lives in `Sources/Resources/Assets.xcassets/AppIcon.appiconset` — regenerate with your brand.
