@@ -102,7 +102,16 @@ final class StoreKitConfigurationTests: XCTestCase {
 
     /// A purchase in the test session must produce a verified transaction that survives `finish()`
     /// and shows up as a current entitlement — the same check `ProStore` relies on.
+    ///
+    /// Skipped on CI: GitHub's macOS runners have no working StoreKit test daemon, so
+    /// `product.purchase()` never returns there (verified in run 42120249948). The deterministic
+    /// contract tests above still run everywhere; the interactive purchase is covered locally and
+    /// by the sandbox cases in `docs/TEST_PLAN.md`.
     func testPurchaseBecomesCurrentEntitlement() async throws {
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["CI"] != nil,
+            "StoreKit purchase flow is unavailable on CI runners"
+        )
         _ = try makeSession()
 
         let products = try await Product.products(for: [Expected.monthly])
