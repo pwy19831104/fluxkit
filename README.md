@@ -213,6 +213,9 @@ Shared/       SharedInbox (App Group mailbox), LinkURL + LinkTextExtractor (comp
 ShareExtension/
               ShareViewController (share sheet UI + link extraction)
 Tests/        resolver, model, HLS and deep-link unit tests
+UITests/      XCUITests (home, settings, library, paywall, pro state)
+docs/         positioning, roadmap, pro setup, store copy, legal pages
+site/         generated static pages for openkit.cloud (see docs/HOSTING.md)
 project.yml   XcodeGen spec (Info.plists + entitlements are generated from it)
 ```
 
@@ -271,6 +274,7 @@ SIMCTL_CHILD_SET_LANGUAGE=zh-Hans xcrun simctl launch booted cloud.streamkit.app
 - CI: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) generates the project, boots a
   simulator, runs unit + UI tests, and compiles a Release build.
 
-See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the feature status, and
+See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the feature status,
 [`docs/LAUNCH_GUIDE.md`](docs/LAUNCH_GUIDE.md) for the step-by-step App Store Connect +
-RevenueCat launch checklist.
+RevenueCat launch checklist, and [`docs/HOSTING.md`](docs/HOSTING.md) for publishing the
+privacy policy / terms / support pages (`make site`).

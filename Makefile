@@ -3,7 +3,10 @@ SCHEME := FluxKit
 DESTINATION ?= platform=iOS Simulator,name=iPhone 18 Pro Max
 XCODEBUILD := xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination '$(DESTINATION)' CODE_SIGNING_ALLOWED=NO
 
-.PHONY: generate test test-unit test-ui build archive export clean
+.PHONY: generate test test-unit test-ui build archive export clean site
+
+site:
+	python3 scripts/build_site.py
 
 generate:
 	xcodegen generate

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FluxKit</title>
+<meta name="description" content="FluxKit — FluxKit">
+<meta name="color-scheme" content="light dark">
+<style>:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #16181d;
+  --muted: #5c6470;
+  --line: #e6e8ec;
+  --accent: #4a5cf5;
+  --card: #f7f8fa;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d0f14;
+    --fg: #eceef2;
+    --muted: #9aa3b2;
+    --line: #23262d;
+    --accent: #8b96ff;
+    --card: #151822;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+}
+.wrap { max-width: 46rem; margin: 0 auto; padding: 0 1.25rem; }
+header.site { border-bottom: 1px solid var(--line); }
+header.site .wrap {
+  display: flex; align-items: center; gap: 1rem;
+  height: 3.75rem; flex-wrap: wrap;
+}
+.brand { font-weight: 700; letter-spacing: -0.01em; text-decoration: none; color: var(--fg); }
+nav { display: flex; gap: 1.1rem; margin-left: auto; }
+nav a { color: var(--muted); text-decoration: none; font-size: 0.9rem; }
+nav a:hover, nav a[aria-current="page"] { color: var(--accent); }
+main { padding: 2.75rem 0 4rem; }
+h1 { font-size: 1.9rem; line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 0.5rem; }
+h2 { font-size: 1.15rem; margin: 2.2rem 0 0.6rem; letter-spacing: -0.01em; }
+p, li { color: var(--fg); }
+li { margin: 0.3rem 0; }
+a { color: var(--accent); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 2.5rem 0; }
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em; background: var(--card); padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+footer.site {
+  border-top: 1px solid var(--line); padding: 1.5rem 0 2.5rem;
+  color: var(--muted); font-size: 0.85rem;
+}
+footer.site a { color: var(--muted); }
+.cards { display: grid; gap: 0.85rem; margin: 2rem 0 0; padding: 0; list-style: none; }
+@media (min-width: 34rem) { .cards { grid-template-columns: 1fr 1fr 1fr; } }
+.cards a {
+  display: block; padding: 1rem 1.1rem; border: 1px solid var(--line);
+  border-radius: 14px; background: var(--card); text-decoration: none; color: var(--fg);
+}
+.cards span { display: block; color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem; }
+.lede { color: var(--muted); font-size: 1.02rem; }
+.contact {
+  margin: 2rem 0 0; padding: 1rem 1.1rem; border: 1px solid var(--line);
+  border-radius: 14px; background: var(--card);
+}
+@media print {
+  header.site, footer.site, nav { display: none; }
+  body { background: #fff; color: #000; }
+  main { padding: 0; }
+}
+</style>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="/">FluxKit</a>
+    <nav>
+        <a href="/privacy-policy">Privacy Policy</a>
+        <a href="/terms-of-service">Terms of Use</a>
+        <a href="/support">Support</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+<h1>FluxKit</h1>
+<p class="lede">An offline media saver for iPhone: HLS playlists, direct links, and podcast
+feeds. Paste a link, tap Download, keep it offline.</p>
+
+<ul class="cards">
+  <li><a href="/support">Support<span>Help, FAQ, and contact</span></a></li>
+  <li><a href="/privacy-policy">Privacy Policy<span>What stays on your device</span></a></li>
+  <li><a href="/terms-of-service">Terms of Use<span>License and subscriptions</span></a></li>
+</ul>
+
+<div class="contact">
+  <p><strong>Contact</strong> — <a href="mailto:support@openkit.cloud">support@openkit.cloud</a></p>
+  <p class="lede">FluxKit downloads media from links you provide. It does not host content and does
+  not bypass DRM, logins, or paywalls. Only save media you have the right to keep.</p>
+</div>
+
+  </div>
+</main>
+<footer class="site">
+  <div class="wrap">
+    © 2026 OpenKit · <a href="mailto:support@openkit.cloud">support@openkit.cloud</a> ·
+    <a href="/privacy-policy">Privacy</a> · <a href="/terms-of-service">Terms</a>
+  </div>
+</footer>
+</body>
+</html>

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FluxKit Support</title>
+<meta name="description" content="FluxKit — FluxKit Support">
+<meta name="color-scheme" content="light dark">
+<style>:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #16181d;
+  --muted: #5c6470;
+  --line: #e6e8ec;
+  --accent: #4a5cf5;
+  --card: #f7f8fa;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d0f14;
+    --fg: #eceef2;
+    --muted: #9aa3b2;
+    --line: #23262d;
+    --accent: #8b96ff;
+    --card: #151822;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+}
+.wrap { max-width: 46rem; margin: 0 auto; padding: 0 1.25rem; }
+header.site { border-bottom: 1px solid var(--line); }
+header.site .wrap {
+  display: flex; align-items: center; gap: 1rem;
+  height: 3.75rem; flex-wrap: wrap;
+}
+.brand { font-weight: 700; letter-spacing: -0.01em; text-decoration: none; color: var(--fg); }
+nav { display: flex; gap: 1.1rem; margin-left: auto; }
+nav a { color: var(--muted); text-decoration: none; font-size: 0.9rem; }
+nav a:hover, nav a[aria-current="page"] { color: var(--accent); }
+main { padding: 2.75rem 0 4rem; }
+h1 { font-size: 1.9rem; line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 0.5rem; }
+h2 { font-size: 1.15rem; margin: 2.2rem 0 0.6rem; letter-spacing: -0.01em; }
+p, li { color: var(--fg); }
+li { margin: 0.3rem 0; }
+a { color: var(--accent); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 2.5rem 0; }
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em; background: var(--card); padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+footer.site {
+  border-top: 1px solid var(--line); padding: 1.5rem 0 2.5rem;
+  color: var(--muted); font-size: 0.85rem;
+}
+footer.site a { color: var(--muted); }
+.cards { display: grid; gap: 0.85rem; margin: 2rem 0 0; padding: 0; list-style: none; }
+@media (min-width: 34rem) { .cards { grid-template-columns: 1fr 1fr 1fr; } }
+.cards a {
+  display: block; padding: 1rem 1.1rem; border: 1px solid var(--line);
+  border-radius: 14px; background: var(--card); text-decoration: none; color: var(--fg);
+}
+.cards span { display: block; color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem; }
+.lede { color: var(--muted); font-size: 1.02rem; }
+.contact {
+  margin: 2rem 0 0; padding: 1rem 1.1rem; border: 1px solid var(--line);
+  border-radius: 14px; background: var(--card);
+}
+@media print {
+  header.site, footer.site, nav { display: none; }
+  body { background: #fff; color: #000; }
+  main { padding: 0; }
+}
+</style>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="/">FluxKit</a>
+    <nav>
+        <a href="/privacy-policy">Privacy Policy</a>
+        <a href="/terms-of-service">Terms of Use</a>
+        <a href="/support" aria-current="page">Support</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+<h1>FluxKit Support</h1>
+<p>FluxKit is an offline media saver for iPhone. Paste a link (or share one from another app), tap <strong>Download</strong>, and watch or listen without a network. It saves HLS playlists (<code>.m3u8</code>), direct media links, podcast episodes, and files you import from the Files app.</p>
+<h2>Contact</h2>
+<p>Email <strong>support@openkit.cloud</strong> — we usually reply within 2 business days. Please include your iPhone model, iOS version, the app version (Settings → About), and the link type you were trying to download if it is relevant. Never send passwords or account credentials.</p>
+<h2>Common questions</h2>
+<p><strong>Where are my downloads?</strong> Files app → <strong>On My iPhone → FluxKit → Media</strong>. Inside FluxKit they also appear in the <strong>Library</strong> tab, and video can be saved to Photos with <strong>Save to Photos</strong>.</p>
+<p><strong>Which links work?</strong> Direct files (<code>.mp4</code>, <code>.mov</code>, <code>.m4v</code>, <code>.webm</code>, <code>.mp3</code>, <code>.m4a</code>, <code>.aac</code>, <code>.wav</code>, <code>.ogg</code>), HLS playlists (<code>.m3u8</code>), public pages that embed a video with <code>og:video</code>, a <code>&lt;video&gt;</code> tag or JSON-LD <code>contentUrl</code>, and podcast RSS/Atom feeds.</p>
+<p><strong>Why do Douyin / TikTok / YouTube / Instagram links fail?</strong> Those apps never expose a downloadable file on the page you share. The playback URL is created inside their own app session, signed with a short-lived token, and expires within minutes. FluxKit runs entirely on your iPhone, has no server, and does not fake those signatures, so it rejects these links immediately with an explanation instead of downloading an HTML page and failing later. Links that need a login, a subscription, or DRM playback do not work either.</p>
+<p><strong>Live streams?</strong> A playlist without an end marker (no <code>EXT-X-ENDLIST</code>) is a live stream; FluxKit does not record live streams and says so up front.</p>
+<p><strong>Downloads in the background?</strong> Direct-link downloads use a background session and can finish while the app is suspended. HLS downloads pause when iOS suspends the app and continue from the last finished segment when you come back — pause, crash, or relaunch all resume rather than restart.</p>
+<p><strong>Wi-Fi only.</strong> Turn on <strong>Settings → Downloads → Wi-Fi only</strong>. On cellular the tasks wait in the queue with a note instead of using your data.</p>
+<p><strong>FluxKit Pro isn't active after purchase.</strong> Open <strong>Settings → Upgrade</strong> (or the paywall) and tap <strong>Restore purchases</strong>. Purchases are handled by Apple through your Apple ID; make sure the device is signed in with the Apple ID that bought the subscription.</p>
+<p><strong>Manage or cancel a subscription.</strong> iOS <strong>Settings → Apple ID → Subscriptions</strong>, or <a href="https://apps.apple.com/account/subscriptions">https://apps.apple.com/account/subscriptions</a>. Deleting the app does not cancel a subscription. Refunds are handled by Apple.</p>
+<p><strong>What is free and what needs Pro?</strong> Downloading, HLS support, subtitles, Picture in Picture, and Files access are free, one download at a time. FluxKit Pro (monthly or yearly, auto-renewing) raises the queue to 4 simultaneous downloads and enables podcast auto-download.</p>
+<p><strong>Notifications.</strong> Download and failure notifications are off by default; turn them on in <strong>Settings → Notifications</strong>. The app asks for permission only when you enable them.</p>
+<p><strong>Privacy in one line.</strong> No account, no analytics, no ads, no tracking. Links are requested straight from the source server and never sent to us. See the <a href="/privacy-policy">Privacy Policy</a>.</p>
+<h2>中文支持</h2>
+<p>FluxKit 是 iPhone 上的离线媒体保存工具：粘贴链接（或从其他 App 分享过来），点「下载」，之后不联网也能看、能听。支持 HLS 播放列表（<code>.m3u8</code>）、音视频直链、播客节目，以及从「文件」App 导入的媒体。</p>
+<p><strong>联系方式：</strong>邮箱 <strong>support@openkit.cloud</strong>，通常 2 个工作日内回复。请附上机型、iOS 版本、App 版本（设置 → 关于）和出问题的链接类型。请勿发送账号密码。</p>
+<p><strong>下载的文件在哪里？</strong> 「文件」App → <strong>我的 iPhone → FluxKit → Media</strong>。App 内的「片库」也能看到；视频可用「存相册」保存到「照片」。</p>
+<p><strong>哪些链接可以下载？</strong> 直链文件（<code>.mp4</code>、<code>.mov</code>、<code>.m4v</code>、<code>.webm</code>、<code>.mp3</code>、<code>.m4a</code>、<code>.aac</code>、<code>.wav</code>、<code>.ogg</code>）、HLS 播放列表（<code>.m3u8</code>）、用 <code>og:video</code>／<code>&lt;video&gt;</code>／JSON-LD <code>contentUrl</code> 暴露视频的公开网页，以及播客的 RSS/Atom 订阅地址。</p>
+<p><strong>为什么抖音、TikTok、YouTube、Instagram 的链接下不了？</strong> 这些 App 从不把可下载的文件放在你分享出来的页面上：真正的播放地址是在它们自己的会话里生成的，每次请求都带短时效签名，几分钟就过期。FluxKit 完全在 iPhone 本地运行，没有服务器，也不会伪造这些签名，所以它会立刻拒绝这类链接并说明原因，而不是先下个网页再失败。需要登录、付费或 DRM 播放的链接同样不支持。</p>
+<p><strong>直播流？</strong> 没有结束标记（缺 <code>EXT-X-ENDLIST</code>）的播放列表属于直播，FluxKit 不支持录制直播，会明确提示。</p>
+<p><strong>能后台下载吗？</strong> 直链下载使用后台会话，App 被挂起时也能继续完成。HLS 下载在系统挂起 App 时暂停，回到前台后从最后一个完成的分片继续——暂停、崩溃或重启都不会从头再来。</p>
+<p><strong>只想用 Wi-Fi？</strong> 打开「设置 → 下载 → 仅 Wi-Fi」。蜂窝网络下任务会停在队列并给出提示，不会偷跑流量。</p>
+<p><strong>买了 Pro 却没生效？</strong> 打开「设置 → 升级」（或付费页）点<strong>恢复购买</strong>。购买由 Apple 通过你的 Apple ID 处理，请确认设备登录的是购买时用的那个 Apple ID。</p>
+<p><strong>如何管理或取消订阅？</strong> iOS「设置 → Apple ID → 订阅」，或 <a href="https://apps.apple.com/account/subscriptions">https://apps.apple.com/account/subscriptions</a> 。删除 App 不会取消订阅。退款由 Apple 处理。</p>
+<p><strong>免费版和 Pro 的区别？</strong> 下载、HLS、字幕、画中画、文件访问都免费，同时下载 1 个。FluxKit Pro（按月或按年，自动续期）把队列提高到同时 4 个，并开启播客自动下载。</p>
+<p><strong>通知</strong> 下载完成/失败通知默认关闭，可在「设置 → 通知」开启；只有在你开启时 App 才会请求通知权限。</p>
+<p><strong>隐私一句话</strong> 没有账号、没有分析、没有广告、没有追踪。链接直接向源站请求，不会发给我们。详见 <a href="/privacy-policy">隐私政策</a>。</p>
+  </div>
+</main>
+<footer class="site">
+  <div class="wrap">
+    © 2026 OpenKit · <a href="mailto:support@openkit.cloud">support@openkit.cloud</a> ·
+    <a href="/privacy-policy">Privacy</a> · <a href="/terms-of-service">Terms</a>
+  </div>
+</footer>
+</body>
+</html>

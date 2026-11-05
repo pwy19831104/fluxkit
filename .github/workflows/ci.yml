@@ -35,6 +35,13 @@ jobs:
       - name: Generate project
         run: xcodegen generate
 
+      - name: Build static site
+        run: |
+          python3 scripts/build_site.py
+          for p in / /privacy-policy /terms-of-service /support; do
+            test -f "site${p%/}/index.html" || { echo "missing $p"; exit 1; }
+          done
+
       - name: Boot simulator
         run: |
           DEVICE=$(xcrun simctl list devices available -j | python3 -c '

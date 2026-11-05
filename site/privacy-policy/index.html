@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FluxKit Privacy Policy</title>
+<meta name="description" content="FluxKit — FluxKit Privacy Policy">
+<meta name="color-scheme" content="light dark">
+<style>:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #16181d;
+  --muted: #5c6470;
+  --line: #e6e8ec;
+  --accent: #4a5cf5;
+  --card: #f7f8fa;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d0f14;
+    --fg: #eceef2;
+    --muted: #9aa3b2;
+    --line: #23262d;
+    --accent: #8b96ff;
+    --card: #151822;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+}
+.wrap { max-width: 46rem; margin: 0 auto; padding: 0 1.25rem; }
+header.site { border-bottom: 1px solid var(--line); }
+header.site .wrap {
+  display: flex; align-items: center; gap: 1rem;
+  height: 3.75rem; flex-wrap: wrap;
+}
+.brand { font-weight: 700; letter-spacing: -0.01em; text-decoration: none; color: var(--fg); }
+nav { display: flex; gap: 1.1rem; margin-left: auto; }
+nav a { color: var(--muted); text-decoration: none; font-size: 0.9rem; }
+nav a:hover, nav a[aria-current="page"] { color: var(--accent); }
+main { padding: 2.75rem 0 4rem; }
+h1 { font-size: 1.9rem; line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 0.5rem; }
+h2 { font-size: 1.15rem; margin: 2.2rem 0 0.6rem; letter-spacing: -0.01em; }
+p, li { color: var(--fg); }
+li { margin: 0.3rem 0; }
+a { color: var(--accent); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 2.5rem 0; }
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em; background: var(--card); padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+footer.site {
+  border-top: 1px solid var(--line); padding: 1.5rem 0 2.5rem;
+  color: var(--muted); font-size: 0.85rem;
+}
+footer.site a { color: var(--muted); }
+.cards { display: grid; gap: 0.85rem; margin: 2rem 0 0; padding: 0; list-style: none; }
+@media (min-width: 34rem) { .cards { grid-template-columns: 1fr 1fr 1fr; } }
+.cards a {
+  display: block; padding: 1rem 1.1rem; border: 1px solid var(--line);
+  border-radius: 14px; background: var(--card); text-decoration: none; color: var(--fg);
+}
+.cards span { display: block; color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem; }
+.lede { color: var(--muted); font-size: 1.02rem; }
+.contact {
+  margin: 2rem 0 0; padding: 1rem 1.1rem; border: 1px solid var(--line);
+  border-radius: 14px; background: var(--card);
+}
+@media print {
+  header.site, footer.site, nav { display: none; }
+  body { background: #fff; color: #000; }
+  main { padding: 0; }
+}
+</style>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="/">FluxKit</a>
+    <nav>
+        <a href="/privacy-policy" aria-current="page">Privacy Policy</a>
+        <a href="/terms-of-service">Terms of Use</a>
+        <a href="/support">Support</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+<h1>FluxKit Privacy Policy</h1>
+<p><strong>Last updated: 4 November 2026</strong></p>
+<p>FluxKit is an offline media saver for iPhone. It downloads HLS playlists, direct media links, podcast feeds, and files you import, so you can watch or listen offline. This policy explains what data is involved. The short version: your files and links stay on your device; we do not run an account system or analytics, and the only third-party service is RevenueCat for subscription management.</p>
+<h2>1. What stays on your device</h2>
+<p>FluxKit stores the following locally on your iPhone:</p>
+<ul><li>downloaded media files (in <strong>Files → On My iPhone → FluxKit → Media</strong>);</li><li>your library index, thumbnails, playback positions, and download queue;</li><li>app settings (Wi-Fi only, concurrency, notifications, playback speed, language);</li><li>podcast subscriptions and cached episode metadata;</li><li>subtitle files downloaded with HLS videos.</li></ul>
+<p>None of this is uploaded to us. Deleting a download or deleting the app removes it.</p>
+<h2>2. Links you paste</h2>
+<p>When you paste a link, FluxKit requests that URL (and the media it points to) directly from the source server, the same way a browser would. The link is not sent to us. If a link is rejected (for example DRM-protected or platform-locked content), no download is attempted.</p>
+<h2>3. Subscriptions and RevenueCat</h2>
+<p>FluxKit Pro is an optional auto-renewable subscription. Purchases are processed by Apple through StoreKit 2. We use <strong>RevenueCat</strong> to validate receipts and keep your entitlement in sync across devices.</p>
+<p>RevenueCat may receive:</p>
+<ul><li>an anonymous app user ID generated by the SDK (unless you later identify the user);</li><li>purchase and subscription status (product, renewal, expiration, cancellation);</li><li>basic device and app information needed for the service.</li></ul>
+<p>We do not receive your name, email, or payment details; Apple handles payment. RevenueCat does not use this data for advertising, and FluxKit does not track you across apps or websites. See RevenueCat's privacy policy: <a href="https://www.revenuecat.com/privacy">https://www.revenuecat.com/privacy</a>.</p>
+<h2>4. Notifications</h2>
+<p>If you enable download notifications, the app schedules local notifications on your device. No push server is used.</p>
+<h2>5. Photos and Files</h2>
+<p>If you tap <strong>Save to Photos</strong>, iOS asks for add-only photo permission and the video is saved locally. If you import a file from the Files app, FluxKit copies it into its own library. Nothing is uploaded.</p>
+<h2>6. Analytics, ads, tracking</h2>
+<p>FluxKit contains no advertising SDK, no third-party analytics, and no tracking across apps or websites. We do not use the Advertising Identifier (IDFA) and do not request App Tracking Transparency permission.</p>
+<h2>7. Data retention and deletion</h2>
+<p>Local data remains until you delete the download, clear the app's data, or delete the app. Subscription records are retained by Apple and RevenueCat according to their policies. You can manage or cancel a subscription in iOS Settings → Apple ID → Subscriptions.</p>
+<h2>8. Children</h2>
+<p>FluxKit is a general-purpose utility and is not directed to children under 13. We do not knowingly collect personal data from children.</p>
+<h2>9. Changes</h2>
+<p>If this policy changes, the updated version will be published at this URL with a new date. Material changes will also be noted in the app's release notes.</p>
+<h2>10. Contact</h2>
+<p>Questions? Email <strong>support@openkit.cloud</strong>.</p>
+  </div>
+</main>
+<footer class="site">
+  <div class="wrap">
+    © 2026 OpenKit · <a href="mailto:support@openkit.cloud">support@openkit.cloud</a> ·
+    <a href="/privacy-policy">Privacy</a> · <a href="/terms-of-service">Terms</a>
+  </div>
+</footer>
+</body>
+</html>
