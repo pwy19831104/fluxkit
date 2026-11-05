@@ -53,7 +53,7 @@ does not record audio, does not use the microphone, and does not run any other b
 
 ## Subscription (FluxKit Pro)
 
-- Two auto-renewable subscriptions (`cloud.streamkit.pro.monthly`, `cloud.streamkit.pro.yearly`) in
+- Two auto-renewable subscriptions (`cloud.fluxkit.pro.monthly`, `cloud.fluxkit.pro.yearly`) in
   one group. Pro unlocks 4-at-a-time downloads and podcast auto-download. The core downloader,
   HLS support, subtitles, PiP, and Files access remain free.
 - Purchases are processed by Apple StoreKit 2; **RevenueCat** validates receipts and syncs the

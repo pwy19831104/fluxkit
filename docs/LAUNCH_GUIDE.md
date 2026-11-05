@@ -110,7 +110,7 @@ third-party content?”，关键词是 **access**。FluxKit 虽不内置任何�
 | 字段 | 月付 | 年付 |
 |---|---|---|
 | Reference Name | `FluxKit Pro Monthly` | `FluxKit Pro Yearly` |
-| Product ID | `cloud.streamkit.pro.monthly` | `cloud.streamkit.pro.yearly` |
+| Product ID | `cloud.fluxkit.pro.monthly` | `cloud.fluxkit.pro.yearly` |
 | Subscription Duration | 1 Month | 1 Year |
 
 3. 每个订阅分别填：
@@ -199,7 +199,7 @@ RevenueCat → **Projects** → **＋ New Project**：
 
 **Products** → **Import from App Store**：
 
-- 勾选 `cloud.streamkit.pro.monthly`、`cloud.streamkit.pro.yearly` → Import。
+- 勾选 `cloud.fluxkit.pro.monthly`、`cloud.fluxkit.pro.yearly` → Import。
 - 如果商品还没在 App Store Connect 创建，先回第一部分第 5 节。
 
 ## 4. 创建 Entitlement
@@ -217,8 +217,8 @@ RevenueCat → **Projects** → **＋ New Project**：
 - Identifier：`default`
 - 右上角 **Make Current**（必须 Current，否则 App 拿不到 packages）
 - **Add Package**：
-  - 选 **Monthly** → 选择 `cloud.streamkit.pro.monthly`
-  - 选 **Annual** → 选择 `cloud.streamkit.pro.yearly`
+  - 选 **Monthly** → 选择 `cloud.fluxkit.pro.monthly`
+  - 选 **Annual** → 选择 `cloud.fluxkit.pro.yearly`
 - 保存后确认页面显示两个 package 且 offering 为 Current。
 
 ## 6. 获取 Public SDK Key

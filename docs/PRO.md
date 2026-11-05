@@ -9,8 +9,8 @@ entitlement 同步、跨设备恢复和 Offering 管理。App 内不保存任何
 
 | 商品 ID | 周期 |
 |---|---|
-| `cloud.streamkit.pro.monthly` | 1 个月 |
-| `cloud.streamkit.pro.yearly` | 1 年 |
+| `cloud.fluxkit.pro.monthly` | 1 个月 |
+| `cloud.fluxkit.pro.yearly` | 1 年 |
 
 - 填写价格、本地化（en-US / zh-Hans）、审核截图。
 - 在 App 版本页把两个商品加入「App 内购买项目」。
@@ -25,8 +25,8 @@ entitlement 同步、跨设备恢复和 Offering 管理。App 内不保存任何
    （`ProConfig.entitlementID`），把两个商品都挂到它上面。
 5. **Offerings**：新建 offering（设为 Current，identifier 建议 `default`），
    添加两个 package：
-   - `$rc_monthly` → `cloud.streamkit.pro.monthly`
-   - `$rc_annual` → `cloud.streamkit.pro.yearly`
+   - `$rc_monthly` → `cloud.fluxkit.pro.monthly`
+   - `$rc_annual` → `cloud.fluxkit.pro.yearly`
 6. 复制 **public SDK key**：
    - 开发/测试：使用 **Test Store** 的 key（`test_…`），购买是模拟的，不经过 App Store；
    - 上架：使用 Apple 平台的 public key（`appl_…`）。

@@ -23,8 +23,8 @@ struct ProProduct: Identifiable, Hashable {
 }
 
 enum ProCatalog {
-    static let monthlyID = "cloud.streamkit.pro.monthly"
-    static let yearlyID = "cloud.streamkit.pro.yearly"
+    static let monthlyID = "cloud.fluxkit.pro.monthly"
+    static let yearlyID = "cloud.fluxkit.pro.yearly"
 
     static let products: [ProProduct] = [
         ProProduct(id: monthlyID, title: "Monthly"),

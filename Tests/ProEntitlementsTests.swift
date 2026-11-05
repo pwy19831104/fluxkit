@@ -22,7 +22,7 @@ final class ProEntitlementsTests: XCTestCase {
     }
 
     func testCatalogIDsAreStable() {
-        XCTAssertEqual(ProCatalog.monthlyID, "cloud.streamkit.pro.monthly")
-        XCTAssertEqual(ProCatalog.yearlyID, "cloud.streamkit.pro.yearly")
+        XCTAssertEqual(ProCatalog.monthlyID, "cloud.fluxkit.pro.monthly")
+        XCTAssertEqual(ProCatalog.yearlyID, "cloud.fluxkit.pro.yearly")
     }
 }
