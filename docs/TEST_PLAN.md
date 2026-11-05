@@ -576,10 +576,12 @@ ID:            BUG-<递增>
 | 能力 | 文件 | 说明 |
 |---|---|---|
 | StoreKit 本地配置 | `Configuration.storekit` | 与 ASC/RevenueCat 一致的两个订阅商品（`cloud.fluxkit.pro.monthly` / `.yearly`）、同一订阅组、en_US + zh_CN 本地化；已挂到 `FluxKit` scheme（`storeKitConfiguration`） |
-| 商品契约测试 | `Tests/StoreKitConfigurationTests.swift` | 4 条：ID 与配置一致、价格/周期/订阅组正确、购买后成为 current entitlement、未知 ID 不被解析 |
+| 商品契约测试 | `Tests/StoreKitConfigurationTests.swift` | 4 条：ID 与配置一致、价格/周期/订阅组正确、购买后成为 current entitlement、未知 ID 不被解析（到期/升级两条因测试会话行为不稳定，改由 PRO-05..08 手工沙盒覆盖，原因写在测试文件注释里） |
+| 并发压力测试 | `Tests/TaskRegistryConcurrencyTests.swift` | 8 线程 × 300 轮注册/替换/移除，钉住 `isCurrent` 的契约（替换后必须失效、未知任务算当前），TSan 下 0 报告 |
+| 片库查询已接入真实视图 | `Sources/Views/LibraryView.swift` | `visibleRecords` 现在走 `LibraryQuery.apply(...)`，性能测试覆盖的就是真实路径 |
 | 性能基线 | `Tests/PerformanceTests.swift` | PERF-02（500 项搜索 ~0.6ms / 过滤+排序 ~1.3ms）、PERF-06（500 条索引存取 ~3.4ms） |
 | 启动性能 | `UITests/LaunchPerformanceTests.swift` | PERF-01，`XCTApplicationLaunchMetric(waitUntilResponsive: true)` |
 | 查询逻辑可测化 | `Sources/Core/LibraryQuery.swift` | 把片库过滤/排序从视图里抽成纯函数（UI 侧可后续改用它，行为已对齐） |
 | 夜间消毒器 CI | `.github/workflows/sanitizers.yml` | 每晚 TSan + ASan 跑全部单元测试，另有 Swift 6 严格并发编译（非阻塞） |
 
-**实测结果（本机 iPhone 18 Pro Max 模拟器）**：单元测试 147 条全绿；TSan 下 147 条全绿、0 数据竞争报告；asan 任务已配置在 CI。
+**实测结果（本机 iPhone 18 Pro Max 模拟器）**：单元测试 **149 条全绿**；TSan 下 149 条全绿、**0 数据竞争报告**；ASan 任务已配置在 CI（每周一、四 18:00 UTC 跑，避免 macOS runner 10 倍额度烧穿私有仓库配额）。

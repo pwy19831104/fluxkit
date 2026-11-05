@@ -5,7 +5,9 @@ name: Sanitizers
 # Nightly at 18:00 UTC (02:00 Beijing) plus manual runs.
 on:
   schedule:
-    - cron: '0 18 * * *'
+    # Twice a week: macOS runners burn 10x minutes, and nightly would exceed the free
+    # 2,000 minute/month quota on a private repository.
+    - cron: '0 18 * * 1,4'
   workflow_dispatch:
 
 concurrency:

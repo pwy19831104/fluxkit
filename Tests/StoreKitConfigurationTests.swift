@@ -105,10 +105,12 @@ final class StoreKitConfigurationTests: XCTestCase {
     /// Negative case: an ID that is not in the configuration must not resolve, so a typo in the
     /// paywall or in the RevenueCat offering fails loudly instead of silently showing a product.
     ///
-    /// Expiry (`SKTestSession.expireSubscription`) is deliberately *not* asserted here: on this SDK
-    /// the subscription status snapshot kept reporting `.subscribed` after the call, which makes the
-    /// assertion flaky. Expiry/refund handling is covered by the manual cases PRO-06/PRO-07 in
-    /// `docs/TEST_PLAN.md` plus RevenueCat's server notifications.
+    /// Two flows are deliberately *not* asserted here, because the test session behaves unlike a
+    /// real device: `expireSubscription` kept the status snapshot at `.subscribed`, and purchasing a
+    /// second plan while one is active returned the already-purchased transaction instead of an
+    /// upgrade transaction. Both are covered by the manual sandbox cases PRO-05..PRO-08 in
+    /// `docs/TEST_PLAN.md` and by RevenueCat's server-side entitlement, which is what actually gates
+    /// the app.
     func testUnknownProductIDIsNotResolved() async throws {
         _ = try makeSession()
 

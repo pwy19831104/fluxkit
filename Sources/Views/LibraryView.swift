@@ -19,6 +19,16 @@ struct LibraryView: View {
     enum SortOption: String, CaseIterable {
         case newest, oldest, largest, title
 
+        /// The query layer keeps the ordering rules so they can be unit- and performance-tested.
+        var librarySort: LibrarySort {
+            switch self {
+            case .newest: return .newest
+            case .oldest: return .oldest
+            case .largest: return .largest
+            case .title: return .title
+            }
+        }
+
         var label: String {
             switch self {
             case .newest: return L("Newest first", "最新优先")
@@ -30,17 +40,7 @@ struct LibraryView: View {
     }
 
     private var visibleRecords: [DownloadRecord] {
-        let query = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        var items = library.finished.filter { record in
-            query.isEmpty || record.title.lowercased().contains(query)
-        }
-        switch sort {
-        case .newest: items.sort { $0.createdAt > $1.createdAt }
-        case .oldest: items.sort { $0.createdAt < $1.createdAt }
-        case .largest: items.sort { $0.bytesReceived > $1.bytesReceived }
-        case .title: items.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-        }
-        return items
+        LibraryQuery.apply(library.finished, query: search, sort: sort.librarySort)
     }
 
     private let columns = [
@@ -86,6 +86,14 @@ struct LibraryView: View {
                                                 .stroke(selection.contains(record.id)
                                                         ? Theme.accent : Color.clear, lineWidth: 2)
                                         )
+                                        .accessibilityElement(children: .contain)
+                                        .accessibilityAction {
+                                            if selecting {
+                                                selection.insert(record.id)
+                                            } else {
+                                                open(record)
+                                            }
+                                        }
                                         .onTapGesture {
                                             if selecting {
                                                 if selection.contains(record.id) {
@@ -313,13 +321,12 @@ struct LibraryView: View {
     private func card(_ record: DownloadRecord) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             thumbnail(record)
-                .aspectRatio(16 / 9, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
             Text(record.title)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
-                .lineLimit(2)
+                // Two lines are always reserved, so one- and two-line titles still tile evenly.
+                .lineLimit(2, reservesSpace: true)
                 .multilineTextAlignment(.leading)
 
             HStack(spacing: 6) {
@@ -337,40 +344,35 @@ struct LibraryView: View {
                 }
                 Spacer(minLength: 0)
             }
+            .frame(height: 14, alignment: .leading)
         }
     }
 
+    /// A fixed 16:9 box. The box used to be sized by the thumbnail itself, so a portrait video
+    /// stretched its card and the two-column grid came out ragged — the artwork is now drawn as an
+    /// overlay (which cannot affect layout) and clipped to the box.
     private func thumbnail(_ record: DownloadRecord) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Theme.surfaceRaised)
-
-            thumbnailImage(record)
-
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    durationBadge(record)
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(Theme.surfaceRaised)
+            .aspectRatio(16 / 9, contentMode: .fit)
+            // The artwork is decorative: `scaledToFill` draws outside the 16:9 box, and
+            // `clipShape` only clips *drawing* — without `allowsHitTesting(false)` the overflow
+            // swallowed taps for whatever sat above the card (the search field).
+            .overlay { thumbnailImage(record).allowsHitTesting(false) }
+            .overlay(alignment: .bottomTrailing) {
+                durationBadge(record).padding(6).allowsHitTesting(false)
+            }
+            .overlay(alignment: .topLeading) {
+                if record.isPlayed {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.success)
+                        .padding(6)
+                        .allowsHitTesting(false)
                 }
             }
-            .padding(6)
-
-            progressBar(record)
-
-            if record.isPlayed {
-                VStack {
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Theme.success)
-                            .padding(6)
-                        Spacer()
-                    }
-                    Spacer()
-                }
-            }
-        }
+            .overlay { progressBar(record).allowsHitTesting(false) }
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     @ViewBuilder
