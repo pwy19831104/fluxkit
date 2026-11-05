@@ -28,6 +28,37 @@ final class StoreKitConfigurationTests: XCTestCase {
         return session
     }
 
+
+    /// `product.purchase()` can wait on the StoreKit daemon indefinitely when the simulator keeps a
+    /// pending transaction (seen after a crash mid-purchase). A hang blocks the whole CI job, so the
+    /// purchase is raced against a deadline and reported as a failure instead.
+    private func purchase(
+        _ product: Product, seconds: UInt64 = 30
+    ) async throws -> Product.PurchaseResult {
+        try await withThrowingTaskGroup(of: Product.PurchaseResult.self) { group in
+            group.addTask { try await product.purchase() }
+            group.addTask {
+                try await Task.sleep(nanoseconds: seconds * 1_000_000_000)
+                throw StoreKitTestError.purchaseTimedOut(seconds)
+            }
+            defer { group.cancelAll() }
+            guard let first = try await group.next() else {
+                throw StoreKitTestError.purchaseTimedOut(seconds)
+            }
+            return first
+        }
+    }
+
+    private enum StoreKitTestError: Error, CustomStringConvertible {
+        case purchaseTimedOut(UInt64)
+        var description: String {
+            switch self {
+            case .purchaseTimedOut(let seconds):
+                return "product.purchase() did not return within \(seconds)s — StoreKit daemon may be stuck"
+            }
+        }
+    }
+
     /// The configured products must be exactly the two IDs App Store Connect declares.
     func testConfiguredProductsMatchTheDeclaredIDs() async throws {
         _ = try makeSession()
@@ -77,7 +108,7 @@ final class StoreKitConfigurationTests: XCTestCase {
         let products = try await Product.products(for: [Expected.monthly])
         let product = try XCTUnwrap(products.first)
 
-        switch try await product.purchase() {
+        switch try await purchase(product) {
         case .success(let verification):
             guard case .verified(let transaction) = verification else {
                 return XCTFail("Transaction failed verification")
