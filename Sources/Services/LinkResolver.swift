@@ -63,14 +63,14 @@ struct LinkResolver {
         // Sites with a JavaScript player: the HTML is a skeleton, so skip straight to
         // their JSON endpoint.
         if let extraction = try await SiteExtractor.extract(from: url, session: session) {
-            return .media(try await media(for: extraction, pageURL: url))
+            return .media(try await upgradedMedia(try await media(for: extraction, pageURL: url)))
         }
 
         let probe = try await probeURL(url)
 
         // A file or HLS playlist: nothing else to do.
         if Self.mediaKind(for: probe.contentType, url: probe.url) != nil {
-            return .media(try await resolve(url: url, depth: 0))
+            return .media(try await upgradedMedia(try await resolve(url: url, depth: 0)))
         }
 
         // Podcasts and other RSS/Atom feeds. Feeds can be large (years of episodes),
@@ -83,7 +83,16 @@ struct LinkResolver {
             return .podcast(try FeedParser.parse(text: page.html, feedURL: page.url))
         }
 
-        return .media(try await resolve(url: url, depth: 0))
+        return .media(try await upgradedMedia(try await resolve(url: url, depth: 0)))
+    }
+
+    /// Swaps an `http://` media address for its `https://` twin when the host supports it.
+    private func upgradedMedia(_ media: ResolvedMedia) async throws -> ResolvedMedia {
+        let secure = await upgradedToHTTPS(media.url)
+        guard secure != media.url else { return media }
+        var upgraded = media
+        upgraded.url = secure
+        return upgraded
     }
 
     /// The first web address inside a string, or `nil`. Kept here so the views and the
@@ -94,6 +103,34 @@ struct LinkResolver {
 
     static func normalizedURL(from string: String) -> URL? {
         LinkURL.normalized(from: string)
+    }
+
+    /// Media URLs are frequently handed over as `http://` (搜狐's CDN does exactly that). Try the
+    /// same address over TLS first: plaintext downloads are slower to trust and are the first thing
+    /// App Transport Security blocks. Returns the original URL when the secure variant is not
+    /// usable, so http-only hosts keep working.
+    func upgradedToHTTPS(_ url: URL) async -> URL {
+        guard url.scheme?.lowercased() == "http" else { return url }
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.scheme = "https"
+        guard let secure = components?.url else { return url }
+
+        var request = URLRequest(url: secure)
+        request.httpMethod = "HEAD"
+        request.timeoutInterval = 8
+        guard let (_, response) = try? await session.data(for: request),
+              let http = response as? HTTPURLResponse else { return url }
+        // Any real HTTP answer proves the host speaks TLS for this path. 401/403/405/416 only mean
+        // the server dislikes HEAD or the token, which is fine for our purpose.
+        let usable = (200..<400).contains(http.statusCode)
+            || [401, 403, 405, 416].contains(http.statusCode)
+        if usable {
+            #if DEBUG
+            NSLog("RESOLVE: upgraded \(url.host ?? "?") to https")
+            #endif
+            return secure
+        }
+        return url
     }
 
     /// Media scraped from a page often only works with its page as `Referer`.
@@ -123,7 +160,22 @@ struct LinkResolver {
         ("xhslink.com", "Xiaohongshu", "小红书"),
         ("bilibili.com", "Bilibili", "哔哩哔哩"),
         ("b23.tv", "Bilibili", "哔哩哔哩"),
-        ("netflix.com", "Netflix", "Netflix")
+        ("netflix.com", "Netflix", "Netflix"),
+        // Chinese VOD platforms verified against their live pages: the watch page carries no media
+        // address, and the player asks a signed, session-bound endpoint for it.
+        // 乐视 (le.com) is the clearest case: `player-pc.le.com/player/playJson.json` answers
+        // `{"code":403,"message":"无sign参数"}` and only serves paywalled titles anyway.
+        ("le.com", "LeTV", "乐视视频"),
+        ("letv.com", "LeTV", "乐视视频"),
+        ("iqiyi.com", "iQIYI", "爱奇艺"),
+        ("iq.com", "iQIYI", "爱奇艺"),
+        ("v.qq.com", "Tencent Video", "腾讯视频"),
+        ("youku.com", "Youku", "优酷"),
+        ("tudou.com", "Youku", "优酷"),
+        ("mgtv.com", "Mango TV", "芒果TV"),
+        ("miguvideo.com", "Migu Video", "咪咕视频"),
+        // 央视频's player is a closed WASM/HLS stack (CMG player) served by 总台.
+        ("yangshipin.cn", "Yangshipin", "央视频")
     ]
 
     /// - Returns: the English display name of the platform, or `nil` when the host is fine.
@@ -286,16 +338,11 @@ struct LinkResolver {
 
     /// Reads a whole feed document (podcast feeds routinely exceed 10 MB).
     private func fetchText(_ url: URL) async throws -> Page {
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: URLRequest(url: url))
         guard let http = response as? HTTPURLResponse, (200..<400).contains(http.statusCode) else {
             throw ResolveError.network("Could not load that feed.")
         }
-        let text = String(data: data, encoding: .utf8)
-            ?? String(data: data, encoding: .isoLatin1)
-            ?? ""
-        return Page(url: response.url ?? url, html: text)
+        return Page(url: response.url ?? url, html: Self.decodedText(from: data))
     }
 
     private func fetchPage(_ url: URL) async throws -> Page {
@@ -305,10 +352,26 @@ struct LinkResolver {
         guard let http = response as? HTTPURLResponse, (200..<400).contains(http.statusCode) else {
             throw ResolveError.network("Could not load that page.")
         }
-        let text = String(data: data.prefix(3_000_000), encoding: .utf8)
-            ?? String(data: data.prefix(3_000_000), encoding: .isoLatin1)
-            ?? ""
-        return Page(url: response.url ?? url, html: text)
+        return Page(url: response.url ?? url, html: Self.decodedText(from: data, limit: 4_000_000))
+    }
+
+    /// Many Chinese sites (搜狐视频 among them) still serve GBK/GB18030. Decoding such a page as
+    /// UTF-8 fails and used to yield an empty string, which looks exactly like "this page has no
+    /// video" — so fall back instead of giving up.
+    ///
+    /// `limit` is for HTML pages only. Feeds must be decoded whole: cutting an XML document in the
+    /// middle makes `XMLParser` fail, which reads as "that isn't a podcast feed" (Syntax.fm ships
+    /// ~10 MB, The Daily ~20 MB).
+    static func decodedText(from data: Data, limit: Int? = nil) -> String {
+        let slice: Data = limit.map { data.prefix($0) } ?? data
+        if let text = String(data: slice, encoding: .utf8) { return text }
+        let gb18030 = String.Encoding(
+            rawValue: CFStringConvertEncodingToNSStringEncoding(
+                CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)
+            )
+        )
+        if let text = String(data: slice, encoding: gb18030) { return text }
+        return String(data: slice, encoding: .isoLatin1) ?? ""
     }
 
     // MARK: - Type helpers
@@ -415,7 +478,10 @@ struct LinkResolver {
         // 3. JSON-LD / inline JSON.
         for pattern in ["\"contentUrl\"\\s*:\\s*\"([^\"]+)\"",
                         "\"videoUrl\"\\s*:\\s*\"([^\"]+)\"",
-                        "\"playlistUrl\"\\s*:\\s*\"([^\"]+)\""] {
+                        "\"playlistUrl\"\\s*:\\s*\"([^\"]+)\"",
+                        // Baidu-family feed payloads (`window.jsonData`) that `SiteExtractor`
+                        // does not claim, e.g. m.baidu.com.
+                        "\"playurl\"\\s*:\\s*\"([^\"]+)\""] {
             for match in matches(pattern: pattern, in: html, group: 1) {
                 results.append(match)
             }

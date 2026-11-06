@@ -94,3 +94,11 @@ with the user and the original publisher.
 ## Contact
 
 support@openkit.cloud
+
+## App Transport Security
+
+The app ships `NSAllowsArbitraryLoads = true`. Reason: FluxKit's job is to save whatever link the
+user pastes, and a large part of the long tail (and two supported platforms) only serves media over
+plain `http://`. `LinkResolver.upgradedToHTTPS` still retries every http media address over TLS and
+uses it when the host supports it, so most downloads are encrypted in practice. Hosts that are
+known to need plaintext are enumerated under `NSExceptionDomains`.

@@ -89,21 +89,33 @@ struct HLSDownloader: Sendable {
         guard !videoSegments.isEmpty else { throw HLSError.emptyPlaylist }
 
         var audioSegments: [Segment] = []
+        var audioIsFragmentedMP4 = false
         if let audioURL = playlist.audioURL {
-            audioSegments = (try? await loadSegments(from: audioURL).0) ?? []
+            if let loaded = try? await loadSegments(from: audioURL) {
+                audioSegments = loaded.0
+                audioIsFragmentedMP4 = loaded.1
+            }
         }
+
+        // AVFoundation picks its demuxer from the file extension, so the stitched intermediates
+        // must be named after what they actually contain: fragmented MP4 has to be `.mp4`/`.m4a`
+        // (a `.ts` name makes it "Cannot Open"), and raw AAC segments are ADTS (`.aac`).
+        let videoExtension = isFragmentedMP4 ? "mp4" : "ts"
+        let audioExtension = audioIsFragmentedMP4 ? "m4a" : "aac"
 
         let expected = try await estimatedSize(of: videoSegments)
         if expected > 0 { progress(0, expected) }
 
-        let videoFile = AppPaths.temporary.appendingPathComponent("\(recordID.uuidString)-video.ts")
+        let videoFile = AppPaths.temporary.appendingPathComponent("\(recordID.uuidString)-video.\(videoExtension)")
         _ = try await stitch(videoSegments, into: videoFile, work: shop, prefix: "v") { bytes in
-            progress(bytes, expected > 0 ? expected : bytes)
+            // Report the *estimated* total, which may be 0 when the playlist has no sizes. Passing
+            // `bytes` here made every HLS row read "100%" from the first segment on.
+            progress(bytes, expected)
         }
 
         var audioFile: URL?
         if !audioSegments.isEmpty {
-            let file = AppPaths.temporary.appendingPathComponent("\(recordID.uuidString)-audio.ts")
+            let file = AppPaths.temporary.appendingPathComponent("\(recordID.uuidString)-audio.\(audioExtension)")
             do {
                 _ = try await stitch(audioSegments, into: file, work: shop, prefix: "a")
                 audioFile = file
@@ -128,7 +140,13 @@ struct HLSDownloader: Sendable {
         }
 
         // 2. Mux video (+ audio) into a single MP4.
+        let wantsAudio = !audioSegments.isEmpty
         if let name = await exportMP4(video: videoFile, audio: audioFile, finalName: fileName) {
+            if wantsAudio, audioFile == nil {
+                // The stream ships a separate audio rendition but it could not be muxed; say so
+                // instead of handing over a silent file without a trace.
+                NSLog("HLS: separate audio rendition could not be muxed, the file has video only")
+            }
             try? FileManager.default.removeItem(at: videoFile)
             if let audioFile { try? FileManager.default.removeItem(at: audioFile) }
             await downloadSubtitles(playlist.subtitles, recordID: recordID)

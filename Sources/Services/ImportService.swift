@@ -34,8 +34,7 @@ enum ImportService {
         let fileName = FileNames.uniqueName(
             title: title,
             extension: ext,
-            in: AppPaths.downloads,
-            recordID: recordID
+            in: AppPaths.downloads
         )
         let destination = AppPaths.mediaURL(fileName: fileName)
 
@@ -53,6 +52,7 @@ enum ImportService {
             media: ResolvedMedia(kind: .progressive, url: source, title: title)
         )
         record.state = .finished
+        record.isImported = true
         record.fileName = fileName
         record.bytesReceived = bytes
         record.bytesExpected = bytes

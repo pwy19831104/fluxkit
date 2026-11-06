@@ -126,6 +126,9 @@ struct DownloadRecord: Identifiable, Codable, Hashable, Sendable {
     var lastPosition: Double?
     /// True once the item has been watched/listened to the end.
     var played: Bool?
+    /// `true` for files copied in from Files.app: there is no remote to re-download, so a failed
+    /// import cannot be "retried" — the user has to pick the file again.
+    var isImported: Bool?
     var errorMessage: String?
 
     init(media: ResolvedMedia) {

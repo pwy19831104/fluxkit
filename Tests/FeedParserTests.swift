@@ -112,4 +112,46 @@ final class FeedParserTests: XCTestCase {
         XCTAssertEqual(media.thumbnailURL?.absoluteString, "https://cdn.example.com/episode.jpg")
         XCTAssertEqual(media.pageURL?.absoluteString, "https://example.com/feed.xml")
     }
+    /// Feeds can be huge — Syntax.fm ships ~10 MB, The Daily ~20 MB. Truncating the document at a
+    /// byte budget cuts the XML mid-tree, and `XMLParser` then reports a malformed document, which
+    /// the app showed as "that doesn't look like a podcast feed".
+    func testParsesAFeedBiggerThanAnyDecodingBudget() throws {
+        let filler = String(repeating: "description text ", count: 100) // ~1.7 KB per episode
+        var xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <rss version="2.0"><channel><title>Big Show</title>
+
+            """
+        let episodes = 3000
+        for index in 0..<episodes {
+            xml += """
+                <item>
+                  <title>Episode \(index)</title>
+                  <pubDate>Mon, 09 Sep 2024 10:00:00 +0000</pubDate>
+                  <description>\(filler)</description>
+                  <enclosure url="https://cdn.example.com/\(index).mp3" length="1000" type="audio/mpeg"/>
+                </item>
+
+                """
+        }
+        xml += "</channel></rss>"
+        XCTAssertGreaterThan(xml.utf8.count, 4_000_000, "the fixture must exceed the old 4 MB budget")
+
+        // Decoding must keep the whole document.
+        let text = LinkResolver.decodedText(from: Data(xml.utf8))
+        XCTAssertEqual(text.utf8.count, xml.utf8.count)
+
+        let feed = try FeedParser.parse(text: text, feedURL: URL(string: "https://example.com/big.xml")!)
+        XCTAssertEqual(feed.episodes.count, episodes)
+        XCTAssertEqual(feed.episodes.first?.title, "Episode 0")   // no dates → insertion order kept
+    }
+
+    /// The parse runs off the caller's actor, so a 20 MB feed cannot block the main thread.
+    func testDetachedParseMatchesTheSyncPath() async throws {
+        let feed = try await FeedParser.parseDetached(data: Data(rss.utf8),
+                                                     feedURL: URL(string: "https://example.com/feed.xml")!)
+        XCTAssertEqual(feed.title, "The Example Show")
+        XCTAssertEqual(feed.episodes.count, 2)
+    }
+
 }

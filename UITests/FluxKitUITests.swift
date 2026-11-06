@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 final class FluxKitUITests: XCTestCase {
 
@@ -6,10 +7,14 @@ final class FluxKitUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-    private func launch(_ arguments: [String] = []) -> XCUIApplication {
+    private func launch(_ arguments: [String] = [], pasteSeed: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = arguments
-        app.launchEnvironment = ["APP_LANGUAGE": "en"]
+        var environment = ["APP_LANGUAGE": "en"]
+        // The app seeds its own pasteboard from this: a test runner's `UIPasteboard.general`
+        // write is a cross-process write, and iOS refuses the app's read of it.
+        if let pasteSeed { environment["PASTE_SEED"] = pasteSeed }
+        app.launchEnvironment = environment
         app.launch()
         return app
     }
@@ -21,6 +26,42 @@ final class FluxKitUITests: XCTestCase {
         XCTAssertTrue(app.buttons["home-paste"].exists)
         XCTAssertTrue(app.buttons["home-download"].exists)
         XCTAssertTrue(app.tabBars.buttons["Podcasts"].exists)
+    }
+
+    /// The add-podcast sheet offers Paste next to Add, and pasting fills the field (it does not
+    /// submit), so a feed URL from the clipboard can be reviewed before it is added.
+    func testAddPodcastSheetCanPasteFromClipboard() throws {
+        let link = "https://feeds.npr.org/510289/podcast.xml"
+        let app = launch(pasteSeed: link)
+        app.tabBars.buttons["Podcasts"].tap()
+
+        let add = app.buttons["Add podcast"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10))
+        add.tap()
+
+        XCTAssertTrue(app.buttons["podcast-add"].waitForExistence(timeout: 5))
+        let paste = app.buttons["podcast-paste"]
+        XCTAssertTrue(paste.exists)
+        paste.tap()
+
+        let field = app.textFields["podcast-feed-field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertEqual(field.value as? String, link)
+    }
+
+    /// The Download tab's Paste button is a `PasteButton`: tapping it fills the field with the
+    /// link from the clipboard (and, unlike a programmatic read, needs no permission prompt).
+    func testHomePasteFillsTheLinkField() throws {
+        let link = "https://tv.sohu.com/v/MjAyNjExMDQvbjYyMDI2OTUxNi5zaHRtbA==.html"
+        let app = launch(pasteSeed: link)
+
+        let paste = app.buttons["home-paste"]
+        XCTAssertTrue(paste.waitForExistence(timeout: 10))
+        paste.tap()
+
+        let field = app.textFields["home-link-field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertEqual(field.value as? String, link)
     }
 
     func testSettingsShowsQueuePodcastAndNotificationOptions() {

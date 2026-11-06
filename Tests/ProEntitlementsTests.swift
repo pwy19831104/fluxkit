@@ -20,9 +20,4 @@ final class ProEntitlementsTests: XCTestCase {
         XCTAssertFalse(ProEntitlements.allowsAutoDownload(isPro: false))
         XCTAssertTrue(ProEntitlements.allowsAutoDownload(isPro: true))
     }
-
-    func testCatalogIDsAreStable() {
-        XCTAssertEqual(ProCatalog.monthlyID, "cloud.fluxkit.pro.monthly")
-        XCTAssertEqual(ProCatalog.yearlyID, "cloud.fluxkit.pro.yearly")
-    }
 }

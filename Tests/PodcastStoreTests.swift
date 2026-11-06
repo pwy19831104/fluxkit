@@ -43,4 +43,25 @@ final class PodcastStoreTests: XCTestCase {
             """
         XCTAssertEqual(PodcastStore.feedURLs(inOPML: Data(xml.utf8)).count, 1)
     }
+    // MARK: - Feed identity
+
+    /// Trailing slashes, host case and tracking parameters must not fork a subscription.
+    func testFeedKeyNormalisesCosmeticDifferences() {
+        let base = URL(string: "https://feeds.example.com/show/rss")!
+        for variant in ["https://feeds.example.com/show/rss/",
+                        "https://FEEDS.example.com/show/rss",
+                        "https://feeds.example.com/show/rss?utm_source=twitter",
+                        "https://feeds.example.com/show/rss#top"] {
+            XCTAssertEqual(PodcastStore.feedKey(URL(string: variant)!), PodcastStore.feedKey(base), variant)
+        }
+    }
+
+    func testFeedKeyKeepsMeaningfulDifference() {
+        let a = URL(string: "https://feeds.example.com/show/rss")!
+        let b = URL(string: "https://feeds.example.com/show/rss?id=2")!
+        let c = URL(string: "https://feeds.example.com/other/rss")!
+        XCTAssertNotEqual(PodcastStore.feedKey(a), PodcastStore.feedKey(b))
+        XCTAssertNotEqual(PodcastStore.feedKey(a), PodcastStore.feedKey(c))
+    }
+
 }

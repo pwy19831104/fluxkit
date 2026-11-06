@@ -62,6 +62,14 @@ struct PodcastFeedSheet: View {
                             row(episode)
                         }
                     }
+
+                    if feed.episodes.count >= PodcastStore.maxStoredEpisodes {
+                        Text(L("Subscriptions keep the newest \(PodcastStore.maxStoredEpisodes) episodes to stay light.",
+                               "订阅只保留最新 \(PodcastStore.maxStoredEpisodes) 期，以控制体积。"))
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Theme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)

@@ -22,17 +22,18 @@ final class AppSettings {
         didSet { defaults.set(wifiOnly, forKey: Key.wifiOnly) }
     }
 
-    /// How many downloads run at the same time (1...4).
+    /// How many downloads run at the same time (clamped to 1…4 on read).
+    ///
+    /// The clamp used to live in `didSet`, which re-entered the setter; a computed property over
+    /// the stored value is both simpler and still observable.
     var maxConcurrentDownloads: Int {
-        didSet {
-            let clamped = min(max(maxConcurrentDownloads, 1), 4)
-            if clamped != maxConcurrentDownloads {
-                maxConcurrentDownloads = clamped
-                return
-            }
-            defaults.set(maxConcurrentDownloads, forKey: Key.maxConcurrent)
+        get { min(max(storedMaxConcurrentDownloads, 1), ProEntitlements.maxProConcurrency) }
+        set {
+            storedMaxConcurrentDownloads = newValue
+            defaults.set(newValue, forKey: Key.maxConcurrent)
         }
     }
+    private var storedMaxConcurrentDownloads: Int
 
     /// Local notification when a background download finishes or fails.
     var notifyOnFinish: Bool {
@@ -58,7 +59,7 @@ final class AppSettings {
         self.defaults = defaults
         wifiOnly = defaults.bool(forKey: Key.wifiOnly)
         let concurrency = defaults.integer(forKey: Key.maxConcurrent)
-        maxConcurrentDownloads = concurrency == 0 ? 2 : min(max(concurrency, 1), 4)
+        storedMaxConcurrentDownloads = concurrency == 0 ? 2 : concurrency
         notifyOnFinish = defaults.bool(forKey: Key.notifyOnFinish)
         podcastAutoDownload = defaults.integer(forKey: Key.podcastAutoDownload)
         let speed = defaults.double(forKey: Key.playbackSpeed)

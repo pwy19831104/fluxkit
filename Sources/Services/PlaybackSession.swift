@@ -18,6 +18,15 @@ final class PlaybackSession {
     private var artwork: MPMediaItemArtwork?
     /// Called when the player reaches the end (the queue uses this to auto-advance).
     var onEnded: (() -> Void)?
+    /// Called with a ready-to-show message when the item cannot be played (corrupt/unsupported
+    /// file, codec the device refuses). Without this the player showed a black screen forever.
+    var onError: ((String) -> Void)?
+    /// Lock-screen / headphone next & previous. The caller owns the queue, so it decides whether
+    /// a step is possible and calls `setTrackSkip`.
+    var onNext: (() -> Void)?
+    var onPrevious: (() -> Void)?
+    private var itemStatusObservation: NSKeyValueObservation?
+    private var failedToPlayObserver: NSObjectProtocol?
 
     var currentPosition: Double {
         guard let player else { return 0 }
@@ -47,6 +56,7 @@ final class PlaybackSession {
         installRemoteCommands()
         installObservers()
         installTimeObserver()
+        observePlaybackFailure()
 
         if let startAt, startAt > 3 {
             let target = CMTime(seconds: startAt, preferredTimescale: 600)
@@ -94,6 +104,22 @@ final class PlaybackSession {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
 
+    /// Only the fields that actually change every second, instead of rebuilding the whole
+    /// dictionary (title, duration, artwork) on each tick.
+    private func refreshElapsedTime() {
+        guard let player, var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
+        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentPosition
+        info[MPNowPlayingInfoPropertyPlaybackRate] = player.rate
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    /// Enables the lock-screen skip buttons; the caller knows the queue bounds.
+    func setTrackSkip(enabledNext: Bool, enabledPrevious: Bool) {
+        let center = MPRemoteCommandCenter.shared()
+        center.nextTrackCommand.isEnabled = enabledNext
+        center.previousTrackCommand.isEnabled = enabledPrevious
+    }
+
     private func loadDurationAndArtwork() {
         Task { [weak self] in
             guard let self, let player = self.player, let item = player.currentItem else { return }
@@ -116,7 +142,7 @@ final class PlaybackSession {
         guard let player else { return }
         let interval = CMTime(seconds: 1, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.updateNowPlaying() }
+            Task { @MainActor in self?.refreshElapsedTime() }
         }
     }
 
@@ -156,7 +182,35 @@ final class PlaybackSession {
         }
     }
 
+    private func observePlaybackFailure() {
+        itemStatusObservation = player?.currentItem?.observe(\.status, options: [.new]) { [weak self] item, _ in
+            guard item.status == .failed else { return }
+            Task { @MainActor in self?.reportPlaybackFailure(item.error) }
+        }
+        failedToPlayObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemFailedToPlayToEndTime, object: player?.currentItem, queue: .main
+        ) { [weak self] note in
+            let error = note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
+            Task { @MainActor in self?.reportPlaybackFailure(error) }
+        }
+    }
+
+    private func reportPlaybackFailure(_ error: Error?) {
+        guard let onError else { return }
+        guard let reason = error?.localizedDescription, !reason.isEmpty else {
+            onError(L("This file can't be played.", "这个文件无法播放。"))
+            return
+        }
+        onError(L("This file can't be played: \(reason)", "这个文件无法播放：\(reason)"))
+    }
+
     private func removeObservers() {
+        itemStatusObservation?.invalidate()
+        itemStatusObservation = nil
+        if let failedToPlayObserver {
+            NotificationCenter.default.removeObserver(failedToPlayObserver)
+        }
+        failedToPlayObserver = nil
         if let timeObserver, let player {
             player.removeTimeObserver(timeObserver)
         }
@@ -193,6 +247,14 @@ final class PlaybackSession {
                 guard let player = self?.player else { return }
                 if player.rate > 0 { player.pause() } else { player.play() }
             }
+            return .success
+        }))
+        commandTargets.append((center.nextTrackCommand, center.nextTrackCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.onNext?() }
+            return .success
+        }))
+        commandTargets.append((center.previousTrackCommand, center.previousTrackCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.onPrevious?() }
             return .success
         }))
         commandTargets.append((

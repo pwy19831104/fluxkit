@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var isImporting = false
     @State private var importSummary: String?
     @State private var showPaywall = false
+    @State private var showClearTempConfirm = false
 
     var body: some View {
         NavigationStack {
@@ -58,6 +59,19 @@ struct SettingsView: View {
                 case .success(let url): importOPML(url)
                 case .failure(let error): importSummary = error.localizedDescription
                 }
+            }
+            .confirmationDialog(
+                L("Clear temporary files?", "清理临时文件？"),
+                isPresented: $showClearTempConfirm,
+                titleVisibility: .visible
+            ) {
+                Button(L("Clear", "清理"), role: .destructive) {
+                    AppPaths.purgeTemporaryFiles()
+                }
+                Button(L("Cancel", "取消"), role: .cancel) {}
+            } message: {
+                Text(L("Downloads that already finished are not affected.",
+                       "已经下载完成的文件不受影响。"))
             }
             .alert(L("Subscriptions", "订阅"), isPresented: Binding(
                 get: { importSummary != nil },
@@ -305,6 +319,12 @@ struct SettingsView: View {
         }
     }
 
+    /// HLS jobs keep their segments and concatenated pieces in `AppPaths.temporary`; deleting them
+    /// mid-flight kills the transfer.
+    private var hasActiveHLSJob: Bool {
+        library.active.contains { $0.kind == .hls }
+    }
+
     // MARK: - Notifications
 
     private var notificationsCard: some View {
@@ -349,6 +369,13 @@ struct SettingsView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.textPrimary)
             }
+            if let warning = library.persistenceWarning {
+                Text(warning)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("settings-persistence-warning")
+            }
             Text(L("Downloads are visible in Files → On My iPhone → FluxKit → Media.",
                    "下载文件会出现在「文件」App → 我的 iPhone → FluxKit → Media。"))
                 .font(.system(size: 11))
@@ -356,12 +383,22 @@ struct SettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Button {
-                AppPaths.purgeTemporaryFiles()
+                showClearTempConfirm = true
             } label: {
                 Label(L("Clear temporary files", "清理临时文件"), systemImage: "trash")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.accent)
                     .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .disabled(hasActiveHLSJob)
+            .opacity(hasActiveHLSJob ? 0.5 : 1)
+            .accessibilityIdentifier("settings-clear-temp")
+            if hasActiveHLSJob {
+                Text(L("An HLS download is running — clearing now would break it. Try again once it finishes.",
+                       "有 HLS 下载正在进行，现在清理会中断它。等它完成后再说。"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.danger)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

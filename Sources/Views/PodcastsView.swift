@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct PodcastsView: View {
     @Environment(PodcastStore.self) private var store
@@ -159,6 +160,7 @@ struct AddPodcastSheet: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
                 TextField(L("https://example.com/feed.xml", "https://example.com/feed.xml"), text: $text)
+                    .accessibilityIdentifier("podcast-feed-field")
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
@@ -178,17 +180,28 @@ struct AddPodcastSheet: View {
                         .foregroundStyle(Theme.danger)
                 }
 
-                Button {
-                    add()
-                } label: {
-                    HStack {
-                        if isAdding { ProgressView().tint(.black) }
-                        Text(isAdding ? L("Checking…", "检查中…") : L("Add podcast", "添加播客"))
+                HStack(spacing: 10) {
+                    // Same control as the Download tab: our own label, so it follows the in-app
+                    // language switch (a `PasteButton` would use the system's own wording).
+                    Button(action: pasteFromClipboard) {
+                        Label(L("Paste", "粘贴"), systemImage: "doc.on.clipboard")
                     }
-                    .frame(maxWidth: .infinity)
+                    .buttonStyle(GhostButtonStyle())
+                    .accessibilityIdentifier("podcast-paste")
+
+                    Button {
+                        add()
+                    } label: {
+                        HStack(spacing: 8) {
+                            if isAdding { ProgressView().tint(.black) }
+                            Text(isAdding ? L("Checking…", "检查中…") : L("Add podcast", "添加播客"))
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(PrimaryButtonStyle(enabled: canSubmit))
+                    .disabled(!canSubmit)
+                    .accessibilityIdentifier("podcast-add")
                 }
-                .buttonStyle(PrimaryButtonStyle(enabled: canSubmit))
-                .disabled(!canSubmit)
 
                 Text(L("Paste the show's RSS/Atom feed URL — often linked as “RSS” on the show's site.",
                        "粘贴节目的 RSS / Atom 订阅地址——通常在节目官网的「RSS」链接里。"))
@@ -208,6 +221,27 @@ struct AddPodcastSheet: View {
                 }
             }
         }
+    }
+
+    private func pasteFromClipboard() {
+        let raw = UIPasteboard.general.string ?? UIPasteboard.general.url?.absoluteString
+        guard let raw, !raw.isEmpty else {
+            error = L("Clipboard is empty, or iOS didn't allow reading it.",
+                      "剪贴板是空的，或者系统没有允许读取剪贴板。")
+            return
+        }
+        accept(raw)
+    }
+
+    /// Digs the link out of whatever was pasted (share blurbs wrap it) and drops it in the field
+    /// instead of adding immediately — the user gets to look at it first.
+    private func accept(_ pasted: String) {
+        guard let link = LinkResolver.linkString(in: pasted) else {
+            error = L("No link found in what you pasted.", "粘贴的内容里没有找到链接。")
+            return
+        }
+        text = link
+        error = nil
     }
 
     private var canSubmit: Bool {

@@ -62,6 +62,14 @@ enum FeedParser {
         )
     }
 
+    /// Parses off the caller's actor. `XMLParser` is synchronous and podcast feeds reach tens of
+    /// megabytes; doing this on the main thread freezes the UI for seconds.
+    static func parseDetached(data: Data, feedURL: URL) async throws -> PodcastFeed {
+        try await Task.detached(priority: .userInitiated) {
+            try parse(data: data, feedURL: feedURL)
+        }.value
+    }
+
     static func parse(data: Data, feedURL: URL) throws -> PodcastFeed {
         let text = String(data: data, encoding: .utf8)
             ?? String(data: data, encoding: .isoLatin1)

@@ -35,8 +35,9 @@ struct RootView: View {
         return value
     }
 
-    /// Links handed over by the share extension (`SharedInbox`) take priority over nothing:
-    /// we only consume one at a time so the user can review each preview.
+    /// Links handed over by the share extension (`SharedInbox`). One at a time, so the user can
+    /// review each preview; `onChange(of: pendingLink)` calls back here once HomeView has consumed
+    /// the previous one, which is what lets a burst of shares drain instead of piling up.
     private func drainSharedInbox() {
         guard pendingLink == nil else { return }
         #if DEBUG
@@ -80,7 +81,15 @@ struct RootView: View {
         }
         .onAppear(perform: drainSharedInbox)
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { drainSharedInbox() }
+            if phase == .active {
+                drainSharedInbox()
+            } else if phase == .background {
+                // Don't lose the last few progress updates to the save debounce.
+                library.saveNow()
+            }
+        }
+        .onChange(of: pendingLink) { _, newValue in
+            if newValue == nil { drainSharedInbox() }
         }
         .onAppear {
             let appearance = UITabBarAppearance()

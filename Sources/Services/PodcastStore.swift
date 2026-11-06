@@ -8,9 +8,16 @@ final class PodcastStore {
 
     static let shared = PodcastStore()
 
+    /// How many episodes are cached per subscription. Feeds can hold thousands; the store keeps a
+    /// window and the UI says so, instead of silently showing a shorter list.
+    static let maxStoredEpisodes = 100
+
     private(set) var feeds: [PodcastFeed] = []
     private(set) var isRefreshing = false
     private(set) var lastError: String?
+    /// Set when `podcasts.json` could not be used (see `PersistedIndex`).
+    private(set) var persistenceWarning: String?
+    private var canSave = true
 
     private let fileURL = AppPaths.root.appendingPathComponent("podcasts.json")
     private let session: URLSession
@@ -33,20 +40,41 @@ final class PodcastStore {
         }
     }
 
+    /// Identity used for subscription de-duplication: `…/rss` and `…/rss/` are the same feed, and
+    /// so is the URL a redirect landed on.
+    nonisolated static func feedKey(_ url: URL) -> String {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return url.absoluteString
+        }
+        components.scheme = components.scheme?.lowercased()
+        components.host = components.host?.lowercased()
+        components.fragment = nil
+        if let path = components.path as String?, path.count > 1, path.hasSuffix("/") {
+            components.path = String(path.dropLast())
+        }
+        // Analytics parameters must not fork a subscription; real feed parameters stay. An empty
+        // list is set to `nil` so the URL does not keep a dangling "?".
+        let meaningful = components.queryItems?.filter { !$0.name.lowercased().hasPrefix("utm_") }
+        components.queryItems = (meaningful?.isEmpty ?? true) ? nil : meaningful
+        return components.url?.absoluteString ?? url.absoluteString
+    }
+
     func isSubscribed(_ feedURL: URL) -> Bool {
-        feeds.contains { $0.feedURL == feedURL }
+        let key = Self.feedKey(feedURL)
+        return feeds.contains { Self.feedKey($0.feedURL) == key }
     }
 
     func feed(withURL url: URL) -> PodcastFeed? {
-        feeds.first { $0.feedURL == url }
+        let key = Self.feedKey(url)
+        return feeds.first { Self.feedKey($0.feedURL) == key }
     }
 
     // MARK: - Mutations
 
     func subscribe(_ feed: PodcastFeed, autoDownload: Int? = nil) {
         var snapshot = feed
-        snapshot.episodes = Array(feed.episodes.prefix(100))
-        if let index = feeds.firstIndex(where: { $0.feedURL == feed.feedURL }) {
+        snapshot.episodes = Array(feed.episodes.prefix(Self.maxStoredEpisodes))
+        if let index = feeds.firstIndex(where: { Self.feedKey($0.feedURL) == Self.feedKey(feed.feedURL) }) {
             feeds[index] = snapshot
         } else {
             feeds.append(snapshot)
@@ -62,14 +90,16 @@ final class PodcastStore {
     }
 
     func unsubscribe(_ feedURL: URL) {
-        feeds.removeAll { $0.feedURL == feedURL }
+        let key = Self.feedKey(feedURL)
+        feeds.removeAll { Self.feedKey($0.feedURL) == key }
         save()
     }
 
     func apply(_ feed: PodcastFeed) {
-        guard let index = feeds.firstIndex(where: { $0.feedURL == feed.feedURL }) else { return }
+        let key = Self.feedKey(feed.feedURL)
+        guard let index = feeds.firstIndex(where: { Self.feedKey($0.feedURL) == key }) else { return }
         var snapshot = feed
-        snapshot.episodes = Array(feed.episodes.prefix(100))
+        snapshot.episodes = Array(feed.episodes.prefix(Self.maxStoredEpisodes))
         feeds[index] = snapshot
         save()
     }
@@ -126,7 +156,9 @@ final class PodcastStore {
         guard let http = response as? HTTPURLResponse, (200..<400).contains(http.statusCode) else {
             throw ResolveError.network("HTTP error")
         }
-        return try FeedParser.parse(data: data, feedURL: response.url ?? url)
+        // Real feeds reach tens of megabytes (Syntax.fm ~10 MB, The Daily ~20 MB) and `XMLParser`
+        // is synchronous, so parsing must not happen on this @MainActor class.
+        return try await FeedParser.parseDetached(data: data, feedURL: response.url ?? url)
     }
 
     private func downloadLatest(_ count: Int, from feed: PodcastFeed) {
@@ -141,17 +173,18 @@ final class PodcastStore {
     // MARK: - Persistence
 
     private func load() {
-        guard let data = try? Data(contentsOf: fileURL) else { return }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        feeds = (try? decoder.decode([PodcastFeed].self, from: data)) ?? []
+        let result = PersistedIndex.load(PodcastFeed.self,
+                                         from: fileURL,
+                                         label: L("subscriptions", "订阅"))
+        feeds = result.items
+        persistenceWarning = result.warning
+        canSave = result.canSave
+        if let warning = result.warning { NSLog("PodcastStore: \(warning)") }
     }
 
     private func save() {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(feeds) else { return }
-        try? data.write(to: fileURL, options: .atomic)
+        guard canSave else { return }
+        PersistedIndex.save(feeds, to: fileURL)
     }
 }
 

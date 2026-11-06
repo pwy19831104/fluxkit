@@ -81,6 +81,39 @@ final class LinkExtractionTests: XCTestCase {
         }
     }
 
+    /// Chinese VOD sites checked against their live player endpoints.
+    func testFlagsChineseVODPlatforms() {
+        for (host, name) in [("www.le.com", "LeTV"),
+                             ("tv.letv.com", "LeTV"),
+                             ("www.iqiyi.com", "iQIYI"),
+                             ("www.iq.com", "iQIYI"),
+                             ("v.qq.com", "Tencent Video"),
+                             ("v.youku.com", "Youku"),
+                             ("www.tudou.com", "Youku"),
+                             ("www.mgtv.com", "Mango TV"),
+                             ("www.miguvideo.com", "Migu Video"),
+                             ("yangshipin.cn", "Yangshipin"),
+                             ("www.yangshipin.cn", "Yangshipin")] {
+            let url = URL(string: "https://\(host)/x")!
+            XCTAssertEqual(LinkResolver.unsupportedPlatform(for: url), name, host)
+        }
+    }
+
+    /// Sites that *are* supported (or must keep going through the generic scraper) stay unblocked.
+    func testSupportedSitesAreNotBlocked() {
+        for host in ["haokan.baidu.com",
+                     "tv.sohu.com",
+                     "mbd.baidu.com",
+                     "www.fun.tv",
+                     "cdn.example.com",
+                     "plus.qq.com",            // a qq.com host that is not 腾讯视频
+                     "www.sohu.com",           // news pages expose og:video
+                     "my.tv.sohu.com"] {
+            let url = URL(string: "https://\(host)/x")!
+            XCTAssertNil(LinkResolver.unsupportedPlatform(for: url), host)
+        }
+    }
+
     func testAllowsDirectMediaHostsAndPlatformCDNs() {
         // Direct media and platform CDNs (signed *file* URLs are fine, we never touch pages).
         for host in ["cdn.example.com", "v3-web.douyinvod.com", "video.twimg.com"] {

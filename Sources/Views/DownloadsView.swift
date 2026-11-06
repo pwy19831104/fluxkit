@@ -3,6 +3,8 @@ import SwiftUI
 struct DownloadsView: View {
     @Environment(LibraryStore.self) private var library
     @State private var playing: PlaybackRequest?
+    /// Deleting here removes the file itself, so it asks first — same rule as the library tab.
+    @State private var pendingDelete: DownloadRecord?
 
     private var isEmpty: Bool {
         library.active.isEmpty && library.failed.isEmpty && library.finished.isEmpty
@@ -52,7 +54,7 @@ struct DownloadsView: View {
                                                     }
                                                 }
                                                 Button(role: .destructive) {
-                                                    library.remove(record.id)
+                                                    pendingDelete = record
                                                 } label: {
                                                     Label(L("Delete", "删除"), systemImage: "trash")
                                                 }
@@ -75,6 +77,20 @@ struct DownloadsView: View {
         }
         .fullScreenCover(item: $playing) { request in
             PlayerScreen(request: request)
+        }
+        .confirmationDialog(
+            L("Delete this download?", "删除这个下载？"),
+            isPresented: Binding(get: { pendingDelete != nil },
+                                 set: { if !$0 { pendingDelete = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button(L("Delete", "删除"), role: .destructive) {
+                if let record = pendingDelete { library.remove(record.id) }
+                pendingDelete = nil
+            }
+            Button(L("Cancel", "取消"), role: .cancel) { pendingDelete = nil }
+        } message: {
+            Text(L("The file will be removed from this device.", "文件会从这台设备上删除。"))
         }
     }
 

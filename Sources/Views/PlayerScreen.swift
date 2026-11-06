@@ -432,6 +432,10 @@ struct PlayerScreen: View {
         loadSubtitleOptions(for: record, fileURL: fileURL)
         let startAt = library.record(id: record.id)?.lastPosition ?? record.lastPosition
         playback.onEnded = { handleEnded() }
+        playback.onError = { message in alertMessage = message }
+        playback.onNext = { switchTo(index + 1) }
+        playback.onPrevious = { switchTo(index - 1) }
+        playback.setTrackSkip(enabledNext: index + 1 < queue.count, enabledPrevious: index > 0)
         playback.activate(
             player: player,
             title: record.title,
@@ -454,6 +458,9 @@ struct PlayerScreen: View {
         savePosition()
         settings.playbackSpeed = speed
         playback.onEnded = nil
+        playback.onError = nil
+        playback.onNext = nil
+        playback.onPrevious = nil
         playback.deactivate()
         pip.stop()
     }
@@ -485,6 +492,7 @@ struct PlayerScreen: View {
         player = AVPlayer(url: url)
         hasVideoTrack = !Self.audioExtensions.contains(url.pathExtension.lowercased())
         startPlayback()
+        playback.setTrackSkip(enabledNext: index + 1 < queue.count, enabledPrevious: index > 0)
     }
 
     private func deleteCurrent() {

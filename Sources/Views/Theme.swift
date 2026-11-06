@@ -22,13 +22,25 @@ enum Theme {
 }
 
 enum Fmt {
-    static func bytes(_ value: Int64) -> String {
-        guard value > 0 else { return "—" }
+    /// `ByteCountFormatter`/`RelativeDateTimeFormatter` are expensive to build and these helpers
+    /// run for every row on every render, so the instances are created once.
+    private static let byteFormatter: ByteCountFormatter = {
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useMB, .useGB]
         formatter.countStyle = .file
         formatter.zeroPadsFractionDigits = false
-        return formatter.string(fromByteCount: value)
+        return formatter
+    }()
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter
+    }()
+
+    static func bytes(_ value: Int64) -> String {
+        guard value > 0 else { return "—" }
+        return byteFormatter.string(fromByteCount: value)
     }
 
     static func duration(_ seconds: Double?) -> String {
@@ -44,10 +56,10 @@ enum Fmt {
     }
 
     static func relative(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.locale = AppLanguage.current.locale
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
+        // The locale follows the in-app language switch, so it is set per call on the shared
+        // instance rather than baked in.
+        relativeFormatter.locale = AppLanguage.current.locale
+        return relativeFormatter.localizedString(for: date, relativeTo: Date())
     }
 
     static func host(_ url: URL) -> String {
@@ -75,9 +87,11 @@ struct PrimaryButtonStyle: ButtonStyle {
     }
 }
 
-struct GhostButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+/// The secondary-action look: dark raised surface, hairline stroke, 54 pt tall.
+/// Extracted so controls that are not plain `Button`s (`PasteButton`, say) can match it.
+struct GhostSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        content
             .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(Theme.textPrimary)
             .padding(.horizontal, 16)
@@ -90,6 +104,17 @@ struct GhostButtonStyle: ButtonStyle {
                             .stroke(Theme.stroke, lineWidth: 1)
                     )
             )
+    }
+}
+
+extension View {
+    func ghostSurface() -> some View { modifier(GhostSurface()) }
+}
+
+struct GhostButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .ghostSurface()
             .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }

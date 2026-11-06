@@ -4,8 +4,17 @@ struct MediaPreviewSheet: View {
     let media: ResolvedMedia
 
     @Environment(DownloadManager.self) private var downloads
+    @Environment(LibraryStore.self) private var library
     @Environment(\.dismiss) private var dismiss
     @State private var started = false
+
+    /// Same address already in the list (queued, downloading or finished on disk).
+    private var existing: DownloadRecord? {
+        library.records.first { record in
+            guard record.remoteURL == media.url || record.sourceURL == media.url else { return false }
+            return record.isActive || library.fileURL(for: record) != nil
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -33,10 +42,16 @@ struct MediaPreviewSheet: View {
                                 started = true
                                 dismiss()
                             } label: {
-                                Label(L("Start download", "开始下载"), systemImage: "arrow.down.to.line.compact")
+                                Label(existing == nil
+                                      ? L("Start download", "开始下载")
+                                      : L("Already in Downloads", "已在下载列表里"),
+                                      systemImage: existing == nil
+                                      ? "arrow.down.to.line.compact"
+                                      : "checkmark.circle")
                                     .frame(maxWidth: .infinity)
                             }
-                            .buttonStyle(PrimaryButtonStyle())
+                            .buttonStyle(PrimaryButtonStyle(enabled: existing == nil))
+                            .disabled(existing != nil)
                         }
 
                         Text(L("Saved in the app. Share it or save it to Photos when it's done.",

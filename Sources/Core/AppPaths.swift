@@ -130,7 +130,7 @@ enum AppPaths {
         downloads.appendingPathComponent("\(recordID.uuidString).\(sanitize(language)).vtt")
     }
 
-    /// Sidecar subtitles saved next to a download, newest first.
+    /// Sidecar subtitles saved next to a download, ordered by language code (stable, not by date).
     static func subtitleFiles(recordID: UUID) -> [URL] {
         let files = (try? FileManager.default.contentsOfDirectory(
             at: downloads, includingPropertiesForKeys: nil)) ?? []

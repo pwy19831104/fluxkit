@@ -16,18 +16,3 @@ enum ProEntitlements {
         isPro ? max(configured, 0) : 0
     }
 }
-
-struct ProProduct: Identifiable, Hashable {
-    let id: String
-    let title: String
-}
-
-enum ProCatalog {
-    static let monthlyID = "cloud.fluxkit.pro.monthly"
-    static let yearlyID = "cloud.fluxkit.pro.yearly"
-
-    static let products: [ProProduct] = [
-        ProProduct(id: monthlyID, title: "Monthly"),
-        ProProduct(id: yearlyID, title: "Yearly"),
-    ]
-}

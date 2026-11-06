@@ -108,4 +108,69 @@ final class DownloadManagerRefreshTests: XCTestCase {
         XCTAssertEqual(DownloadManager.message(forRejectedStatus: 403), expired)
         XCTAssertEqual(DownloadManager.message(forRejectedStatus: 401), expired)
     }
+
+    // MARK: - Stale task callbacks
+
+    func testReplacedTaskIsNoLongerCurrent() {
+        let registry = TaskRegistry()
+        let recordID = UUID()
+        let entry = TaskRegistry.Entry(recordID: recordID, fileExtension: "mp4")
+
+        registry.register(entry, for: 7)
+        XCTAssertTrue(registry.isCurrent(taskID: 7, recordID: recordID))
+
+        // The lapsed address was re-resolved and a new task took over the record.
+        registry.register(entry, for: 8)
+        XCTAssertFalse(registry.isCurrent(taskID: 7, recordID: recordID))
+        XCTAssertTrue(registry.isCurrent(taskID: 8, recordID: recordID))
+    }
+
+    func testUnknownTaskIsTreatedAsCurrent() {
+        // Tasks re-delivered after a relaunch may not be registered yet; never swallow those.
+        let registry = TaskRegistry()
+        XCTAssertTrue(registry.isCurrent(taskID: 42, recordID: UUID()))
+    }
+    // MARK: - Unusable resume data
+
+    func testResumeRejectionRestartsFromZero() {
+        // The server no longer has the range we resumed from.
+        for code in [NSURLErrorBadServerResponse,
+                     NSURLErrorCannotParseResponse,
+                     NSURLErrorResourceUnavailable,
+                     NSURLErrorCannotDecodeContentData,
+                     NSURLErrorUnsupportedURL] {
+            XCTAssertTrue(
+                DownloadManager.shouldRestartWithoutResume(
+                    usedResumeData: true,
+                    error: NSError(domain: NSURLErrorDomain, code: code)
+                ),
+                "\(code) should restart the download"
+            )
+        }
+    }
+
+    func testTransportFailuresDoNotRestart() {
+        // Throwing away a 900 MB partial download because the phone lost signal would be cruel.
+        for code in [NSURLErrorNotConnectedToInternet, NSURLErrorTimedOut, NSURLErrorNetworkConnectionLost] {
+            XCTAssertFalse(
+                DownloadManager.shouldRestartWithoutResume(
+                    usedResumeData: true,
+                    error: NSError(domain: NSURLErrorDomain, code: code)
+                ),
+                "\(code) must keep the resume data"
+            )
+        }
+    }
+
+    func testRestartOnlyAppliesToResumedTransfers() {
+        XCTAssertFalse(DownloadManager.shouldRestartWithoutResume(
+            usedResumeData: false,
+            error: NSError(domain: NSURLErrorDomain, code: NSURLErrorBadServerResponse)
+        ))
+        XCTAssertFalse(DownloadManager.shouldRestartWithoutResume(
+            usedResumeData: true,
+            error: NSError(domain: "SomeOtherDomain", code: 1)
+        ))
+    }
+
 }

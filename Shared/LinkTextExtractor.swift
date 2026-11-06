@@ -18,14 +18,23 @@ enum LinkTextExtractor {
     /// punctuation, and CJK characters (Chinese prose puts no space before a link).
     private static let separators = "\\s<>\"'`，。；：！？、（）【】《》「」『』　\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Hangul}"
 
-    private static let schemePrefix = try! NSRegularExpression(pattern: "^[A-Za-z][A-Za-z0-9+.\\-]*:")
+    private static let schemePrefix = try? NSRegularExpression(pattern: "^[A-Za-z][A-Za-z0-9+.\\-]*:")
+
+    /// Compiled once: `matches(pattern:)` used to build an `NSRegularExpression` per call.
+    private static let linkRegex = try? NSRegularExpression(pattern: "https?://[^\(separators)]+", options: [.caseInsensitive])
+
+    private static let domainRegex = try? NSRegularExpression(
+        pattern: "(?<![\\w@/.\\-:])(?:[a-zA-Z0-9](?:[a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?\\.)+(?:[a-zA-Z]{2,24})(?::\\d{2,5})?(?:/[^\(separators)]*)?",
+        options: [.caseInsensitive]
+    )
 
     static func firstLink(in text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
         // The whole string is already a link (possibly without a scheme, e.g. "v.douyin.com/x").
-        let hasScheme = schemePrefix.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..<trimmed.endIndex, in: trimmed)) != nil
+        let fullRange = NSRange(trimmed.startIndex..<trimmed.endIndex, in: trimmed)
+        let hasScheme = schemePrefix?.firstMatch(in: trimmed, range: fullRange) != nil
         if !hasScheme,
            trimmed.rangeOfCharacter(from: .whitespacesAndNewlines) == nil,
            let url = LinkURL.normalized(from: trimmed) {
@@ -47,14 +56,11 @@ enum LinkTextExtractor {
     private static func candidates(in text: String) -> [String] {
         var results: [String] = []
 
-        results += matches(pattern: "https?://[^\(separators)]+", in: text)
+        results += matches(linkRegex, in: text)
 
         // Bare domains: v.douyin.com/AfPLqZg3RJo, example.com/clip.mp4, …
         // The look-behind keeps us from matching inside e-mail addresses, schemes or words.
-        results += matches(
-            pattern: "(?<![\\w@/.\\-:])(?:[a-zA-Z0-9](?:[a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?\\.)+(?:[a-zA-Z]{2,24})(?::\\d{2,5})?(?:/[^\(separators)]*)?",
-            in: text
-        )
+        results += matches(domainRegex, in: text)
 
         if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
             let range = NSRange(text.startIndex..<text.endIndex, in: text)
@@ -73,8 +79,8 @@ enum LinkTextExtractor {
         return value
     }
 
-    private static func matches(pattern: String, in text: String) -> [String] {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
+    private static func matches(_ regex: NSRegularExpression?, in text: String) -> [String] {
+        guard let regex else { return [] }
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
         return regex.matches(in: text, range: range).compactMap { match in
             Range(match.range, in: text).map { String(text[$0]) }

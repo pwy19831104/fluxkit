@@ -77,15 +77,20 @@ See [`docs/POSITIONING.md`](docs/POSITIONING.md) for the rationale and ASO plan,
 
 **Works:** direct media links (`mp4`, `mov`, `webm`, `m4a`, `mp3`, …), HLS playlists (`.m3u8`),
 podcast RSS/Atom feeds, public web pages that expose `og:video`, `<video>`, `<source>` or
-JSON-LD `contentUrl`, and 好看视频 / [haokan.baidu.com](https://haokan.baidu.com) links
-(`https://haokan.baidu.com/v?vid=…`) — see *Client-rendered players* below.
+JSON-LD `contentUrl`, and the client-rendered pages `SiteExtractor` knows: 好看视频
+(`haokan.baidu.com/v?vid=…`), 搜狐视频 (`tv.sohu.com/v/…`), 百度信息流
+(`mbd.baidu.com/newspage/data/videolanding?nid=sv_…`) and Reddit video posts
+(`reddit.com/r/…/comments/…`, via the post's `hls_url`).
 
 **Blocked on purpose:** Douyin, TikTok, YouTube, Instagram, Facebook, X, Kuaishou, Xiaohongshu,
-Bilibili, Netflix. These services hand out short-lived, signed playback URLs through an API that
-expects their own app/session; the share page itself contains no media URL. FluxKit checks the
-link before downloading, so it fails fast with a clear message instead of saving an HTML page.
-Supporting them would require a server-side extractor (and rewriting their request signatures),
-which is out of scope and breaks whenever they change the API. See
+Bilibili, Netflix — plus, verified against their live players, 乐视/LetTV, 爱奇艺, 腾讯视频,
+优酷, 芒果TV, 咪咕视频 and 央视频. These services hand out short-lived, signed playback URLs
+through an API that expects their own app/session; the watch page itself contains no media URL.
+乐视 is the clearest example: `player-pc.le.com/player/playJson.json` answers
+`{"code":403,"message":"无sign参数"}`, and the titles behind it are paywalled anyway. FluxKit
+checks the link before downloading, so it fails fast with a clear message instead of saving an
+HTML page. Supporting them would require a server-side extractor (and rewriting their request
+signatures), which is out of scope and breaks whenever they change the API. See
 [`docs/FAQ.md`](docs/FAQ.md).
 
 ### Client-rendered players
@@ -96,12 +101,33 @@ freshly-signed, short-lived address. 好看视频 is one of them — `curl` on
 `https://haokan.baidu.com/v?vid=…` returns no `.mp4` anywhere in the HTML.
 
 `SiteExtractor` handles those: for a known host it skips the scraper and reads the address the
-player itself uses. Haokan's player calls `GET /v?vid=<vid>&_format=json` (the same route that
-serves the page) and takes `data.apiData.curVideoMeta.clarityUrl[*].url` — the exact string a
-user sees on the page's `<video>` element. The extractor picks the largest rendition
-(`videoSize`), falls back to `playurl` and then `previewUrlHttp`, and keeps the page as
-`Referer`. Adding another such site means one small case in `SiteExtractor.swift`; every
-unknown host still goes through the generic scraper.
+player itself uses.
+
+- **好看视频** — the player calls `GET /v?vid=<vid>&_format=json` (the same route that serves the
+  page) and takes `data.apiData.curVideoMeta.clarityUrl[*].url` — the exact string a user sees on
+  the page's `<video>` element. The extractor picks the largest rendition (`videoSize`), falls back
+  to `playurl` and then `previewUrlHttp`.
+- **百度信息流** — no second request: the landing shell carries `window.jsonData` inline, whose
+  `curVideoMeta` (or, in the other variant Baidu serves, `data.videoInfo`) holds the same
+  `clarityUrl`/`clarityArr` rendition list, with plain unsigned `vd*.bdstatic.com` addresses.
+  Both payload shapes are handled because the site hands out either one at random.
+- **搜狐视频** — the watch URL is base64, so the id comes from the page (`var vid="…"`) and the
+  player calls `GET https://my.tv.sohu.com/play/videonew.do?vid=<vid>`, reading
+  `data.mp4PlayUrl[0]`: a tokenised URL that 302-redirects to the real `.mp4` on itc.cn. VIP-only
+  episodes (`play == 0` / non-empty `pay_data`) are reported as such instead of as "no video".
+
+Both keep the page as `Referer`. Adding another such site means one small case in
+`SiteExtractor.swift`; every unknown host still goes through the generic scraper.
+
+- **Reddit** — the post's JSON (`/comments/<id>.json`) carries `secure_media.reddit_video`.
+  `hls_url` is what gets downloaded: Reddit keeps audio in a **separate rendition**, and
+  `HLSDownloader` muxes `#EXT-X-MEDIA:TYPE=AUDIO` back in (see below). `fallback_url` is the DASH
+  video track alone, so it is only used when a post offers no HLS.
+
+Two things worth knowing when adding a site: watch pages are often **GBK/GB18030** (搜狐 is), and
+`LinkResolver.decodedText(from:)` falls back to GB18030 for that reason — decoding as UTF-8 only
+returns an empty string, which looks exactly like "this page has no video". And a token that is
+bound to the request can be single-use/short-lived: probe quickly, then start the download.
 
 Because those addresses are signed, they stop working after about 15 minutes — which is what a
 long pause looks like. `DownloadManager` treats a refused address (401/403/404/410/412/416, or
@@ -215,6 +241,34 @@ Downloads land in `Application Support/FluxKit/Media`, thumbnails next to them i
 `…/Thumbnails`, pending resume data as `…/Media/<record-id>.resume`, and the index in
 `…/library.json`.
 
+## Persistence
+
+`library.json` and `podcasts.json` are written through `PersistedIndex`:
+
+- the file is an envelope with `schemaVersion`, so a future field change can migrate instead of
+  failing to decode;
+- a file that cannot be decoded is **moved aside** (`library.corrupt-<timestamp>.json`) and never
+  overwritten — before this, one bad byte meant an empty library that then replaced the index on
+  the next save;
+- a file written by a *newer* build is left untouched and saving is disabled, so downgrading the
+  app cannot destroy data either. Settings → Storage shows the warning when either happens.
+
+## Download & library behaviour worth knowing
+
+- **One record per address.** `DownloadManager.start` reuses the record for the same media URL:
+  starting a queued item again does nothing, a paused one resumes, a failed one retries, and only a
+  *finished* item whose file is gone is downloaded again. Podcast refreshes and double pastes no
+  longer pile up duplicates.
+- **HLS can pause.** Segments stay on disk, so the pause button is offered for HLS jobs too; only
+  the progress percentage is skipped when the playlist doesn't publish sizes.
+- **Imported files are marked** (`DownloadRecord.isImported`): they have no remote address, so the
+  retry button is hidden and `retry()` explains instead of failing silently.
+- **Feed identity** is normalised (`PodcastStore.feedKey`): trailing slash, host case, fragment and
+  `utm_*` parameters do not fork a subscription. `maxStoredEpisodes` (100) is stated in the sheet.
+- **Library saves are coalesced**: one loop, debounced for structure changes and floored at 2 s while
+  progress callbacks stream in, instead of a fresh `Task` per callback. The index is also flushed on
+  `scenePhase == .background`.
+
 ## Lifecycle notes
 
 - **Progressive downloads** use `URLSessionConfiguration.background(withIdentifier:)` with
@@ -228,6 +282,20 @@ Downloads land in `Application Support/FluxKit/Media`, thumbnails next to them i
   `taskIdentifier`s are not stable across launches.
 - **HLS downloads** are orchestrated in-process (parallel segments + remux), so they pause when
   the app is suspended. Resume data doesn't apply to them.
+- **Separate audio renditions** (`#EXT-X-MEDIA:TYPE=AUDIO`, how Reddit and Apple-style HLS carry
+  sound) are downloaded as a second segment list and muxed with `AVMutableComposition` before
+  export. The stitched intermediates are named after what they *contain* — fragmented MP4 as
+  `.mp4`/`.m4a`, MPEG-TS as `.ts`, raw AAC as `.aac` — because AVFoundation picks its demuxer from
+  the file extension and a `.ts` name on fMP4 data fails with "Cannot Open".
+  Verified with `AVURLAsset`: an fMP4 stream with a separate audio rendition now exports one AAC
+  audio track plus video (11.8 MB / 60 s, was 10.8 MB without sound).
+  **MPEG-TS input** hits an AVFoundation limitation *in the simulator*: composing TS video with
+  ADTS audio fails to export (`-11800`) and the app falls back to the video-only stream. The very
+  same stitched files compose and export cleanly on macOS, so this is expected to work on device —
+  it just has not been verified on one, and the fallback stays silent-video.
+- **One task per record:** `TaskRegistry` remembers which task currently owns a record, so the
+  delegate callbacks of a *replaced* task (the case above, where a lapsed address forced a
+  restart) cannot overwrite the new file, pause the record, or fail it.
 
 ## Layout
 
@@ -296,8 +364,14 @@ SIMCTL_CHILD_SET_LANGUAGE=zh-Hans xcrun simctl launch booted cloud.fluxkit.app
   wired up in `project.yml` (`DEVELOPMENT_TEAM: H5YQ9HSATA`); change that one line if you publish
   under another team.
 - App icon lives in `Sources/Resources/Assets.xcassets/AppIcon.appiconset` — regenerate with your brand.
-- `NSAllowsArbitraryLoads` is enabled because users can supply `http://` media. Explain this in
-  App Review notes; alternatively restrict to `NSAllowsArbitraryLoadsForMedia`.
+- `NSAllowsArbitraryLoads` is enabled because users can supply `http://` media, and several
+  supported CDNs (搜狐's `itc.cn`, 百度's `bdstatic.com`) answer over plaintext. Explain this in
+  App Review notes. What the app does to keep plaintext to a minimum: `LinkResolver.upgradedToHTTPS`
+  retries every `http://` media address over TLS first (搜狐 upgrades to `https://729-8.vod.tv.itc.cn`
+  and downloads fine), 百度 addresses are already rewritten to https, and the hosts that only speak
+  http are listed explicitly under `NSExceptionDomains` in `project.yml` so the blanket switch can
+  be turned off later without breaking them. A residual ATS block is surfaced as a readable error
+  instead of "download failed".
 - Guideline 5.2.3 (copyright) is the main rejection risk for downloader apps: keep the in-app
   notice ("only download content you have permission to save"), avoid naming third-party
   platforms in the metadata, and be ready to explain the DRM stance.

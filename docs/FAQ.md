@@ -24,9 +24,15 @@ HTML page and failing later.
 - An **HLS playlist** (`.m3u8`), including playlists behind a normal HTTP link.
 - A **public web page** that embeds a video with `og:video`, a `<video>` tag, `<source>` or JSON-LD
   `contentUrl` — the app fetches the page and picks the media URL out of it.
-- A **好看视频 link** (`https://haokan.baidu.com/v?vid=…`). That page has no `<video>` in its HTML
-  at all — the player builds it with JavaScript — so the app asks the site's own JSON endpoint for
-  the address the player would use, and downloads the highest rendition it offers.
+- A **好看视频 link** (`https://haokan.baidu.com/v?vid=…`), a **搜狐视频 link**
+  (`https://tv.sohu.com/v/…`) or a **百度信息流 link**
+  (`https://mbd.baidu.com/newspage/data/videolanding?nid=sv_…`). Those pages have no `<video>` in their HTML at all — the player
+  builds it with JavaScript — so the app asks the site's own JSON endpoint for the address the
+  player would use, and downloads the highest rendition it offers. 搜狐视频 episodes that need a
+  VIP membership have no downloadable file and are reported as such.
+- A **Reddit video post** (`reddit.com/r/…/comments/…`) — the app reads the post's JSON and
+  downloads the HLS stream, which is what carries the sound (Reddit's audio is a separate
+  rendition, and it gets muxed back in).
 - A **podcast RSS/Atom feed** — the app lists episodes with date, duration and size, and downloads
   the enclosure URL you pick.
 

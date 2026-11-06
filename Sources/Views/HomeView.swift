@@ -144,6 +144,9 @@ struct HomeView: View {
             )
 
             HStack(spacing: 10) {
+                // A `PasteButton` would skip iOS's "Allow Paste?" prompt, but it renders the
+                // system's own label in the *system* language, which fights this app's in-app
+                // language switch. So the label stays ours and the read is explicit.
                 Button(action: pasteFromClipboard) {
                     Label(L("Paste", "粘贴"), systemImage: "doc.on.clipboard")
                 }
@@ -255,8 +258,17 @@ struct HomeView: View {
     private func pasteFromClipboard() {
         // `string` first: share blurbs (“复制打开抖音… https://…”) arrive as plain text, not URL items.
         let raw = UIPasteboard.general.string ?? UIPasteboard.general.url?.absoluteString
-        guard let raw, !raw.isEmpty else { return }
-        guard let extracted = LinkResolver.linkString(in: raw) else {
+        guard let raw, !raw.isEmpty else {
+            errorMessage = L("Clipboard is empty, or iOS didn't allow reading it.",
+                             "剪贴板是空的，或者系统没有允许读取剪贴板。")
+            return
+        }
+        acceptPasted(raw)
+    }
+
+    /// Share blurbs arrive as plain text, so the link is extracted before it lands in the field.
+    private func acceptPasted(_ pasted: String) {
+        guard let extracted = LinkResolver.linkString(in: pasted) else {
             errorMessage = L("No link found in what you pasted.", "粘贴的内容里没有找到链接。")
             return
         }

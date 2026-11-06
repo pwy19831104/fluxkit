@@ -111,6 +111,9 @@ struct DownloadRow: View {
         )
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .onTapGesture { onTap?() }
+        // `onTapGesture` on a container is invisible to VoiceOver; expose it as an action too.
+        .accessibilityElement(children: .contain)
+        .accessibilityAction { onTap?() }
     }
 
     private var statusText: String {
@@ -118,7 +121,9 @@ struct DownloadRow: View {
         case .queued:
             return record.errorMessage ?? L("Waiting to start", "等待开始")
         case .running:
-            if record.bytesExpected > 0 {
+            // HLS totals are estimates: when one is missing or already exceeded, a percentage
+            // would read "100% · 10.8 MB / 0 MB", so show plain progress instead.
+            if record.bytesExpected > record.bytesReceived {
                 return L("\(Int(record.progress * 100))% · \(Fmt.bytes(record.bytesReceived)) of \(Fmt.bytes(record.bytesExpected))",
                          "\(Int(record.progress * 100))% · \(Fmt.bytes(record.bytesReceived)) / \(Fmt.bytes(record.bytesExpected))")
             }
@@ -158,7 +163,9 @@ struct DownloadRow: View {
         switch record.state {
         case .running, .queued:
             HStack(spacing: 12) {
-                if record.state == .running, record.kind == .progressive {
+                // HLS jobs can pause too (their segments stay on disk), so the control is no
+                // longer limited to progressive transfers.
+                if record.state == .running {
                     Button {
                         downloads.pause(record.id)
                     } label: {
@@ -167,6 +174,7 @@ struct DownloadRow: View {
                             .foregroundStyle(Theme.textSecondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(L("Pause", "暂停"))
                 }
                 Button {
                     downloads.cancel(record.id)
@@ -176,6 +184,7 @@ struct DownloadRow: View {
                         .foregroundStyle(Theme.textSecondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(L("Cancel", "取消"))
             }
         case .paused:
             Button {
@@ -186,15 +195,25 @@ struct DownloadRow: View {
                     .foregroundStyle(Theme.accent)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(L("Resume", "继续"))
         case .failed, .cancelled:
-            Button {
-                downloads.retry(record)
-            } label: {
-                Image(systemName: "arrow.clockwise.circle.fill")
-                    .font(.system(size: 20))
-                    .foregroundStyle(Theme.accent)
+            if record.isImported == true {
+                // Nothing to retry: the file came from Files.app, not from a URL.
+                Image(systemName: "doc.circle")
+                    .font(.system(size: 18))
+                    .foregroundStyle(Theme.textSecondary.opacity(0.6))
+                    .accessibilityLabel(L("Imported file", "导入的文件"))
+            } else {
+                Button {
+                    downloads.retry(record)
+                } label: {
+                    Image(systemName: "arrow.clockwise.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(Theme.accent)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L("Retry", "重试"))
             }
-            .buttonStyle(.plain)
         case .finished:
             Image(systemName: "play.circle.fill")
                 .font(.system(size: 20))
