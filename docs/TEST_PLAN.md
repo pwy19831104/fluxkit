@@ -426,7 +426,7 @@ xcrun xctrace record --template 'Leaks' --device <UDID> \
 | THR-02 | `DownloadManager.swift:899` `TaskRegistry`（`@unchecked Sendable` + `NSLock`） | 旧任务回调覆盖新任务 | 地址过期→自动刷新→旧 task 回调到达（可用 403 场景构造） | 旧 task 回调被丢弃（已有单测，需端到端验证） |
 | THR-03 | `DownloadManager.swift:880` `ProgressRelay`（`@unchecked Sendable`） | 进度乱序导致进度条回跳 | 4 并发 + 弱网 | 进度不倒退 |
 | THR-04 | `BackgroundSessionBridge.swift:8` 静态锁 + completion handler | handler 被调用两次/丢失 → 系统断言或后台任务挂死 | 下载完成瞬间切后台、杀进程、再重启 | handler 恰好调用一次；后台任务不残留 |
-| THR-05 | `Shared/SharedInbox.swift`（App Group `UserDefaults` 读改写） | 扩展 push 与 App pop 并发 → 丢链接 | 连续分享 5 次同时快速冷启动 App | 不丢最新一条；不重复消费 |
+| THR-05 ✅已修 | `Shared/LinkInbox.swift`（文件队列，替代 `UserDefaults` 读改写） | 原实现扩展 push 与 App pop 并发会丢链接 | 6 线程并发 push + 消费者 pop（`LinkInboxTests`，TSan 下跑） | 不丢条目、无重复、载荷不损坏（已加 10 条测试） |
 | THR-06 | `PersistedIndex`（整文件 JSON 写） | 并发保存导致半写/互相覆盖 | 下载完成 + 删除 + 播放进度同时落盘 | 文件始终能被解析；最坏丢失最后一次写入 |
 | THR-07 | `PodcastStore.swift:160`（解析移出主线程）+ `FeedParser.swift:68` `Task.detached` | 捕获 MainActor 对象/状态回写竞争 | 快速切换订阅并刷新 | 无崩溃；列表最终一致 |
 | THR-08 | `PiPManager.swift:50-70`（`nonisolated` 回调 → MainActor） | PiP 控制器在非主线程使用 | PiP 中锁屏/来电/旋转（不支持旋转但系统可能触发） | 无 AVKit 主线程断言崩溃 |
@@ -577,6 +577,7 @@ ID:            BUG-<递增>
 |---|---|---|
 | StoreKit 本地配置 | `Configuration.storekit` | 与 ASC/RevenueCat 一致的两个订阅商品（`cloud.fluxkit.pro.monthly` / `.yearly`）、同一订阅组、en_US + zh_CN 本地化；已挂到 `FluxKit` scheme（`storeKitConfiguration`） |
 | 商品契约测试 | `Tests/StoreKitConfigurationTests.swift` | 4 条：ID 与配置一致、价格/周期/订阅组正确、购买后成为 current entitlement、未知 ID 不被解析（到期/升级两条因测试会话行为不稳定，改由 PRO-05..08 手工沙盒覆盖，原因写在测试文件注释里） |
+| App Group 收件箱 | `Shared/LinkInbox.swift` + `Tests/LinkInboxTests.swift` | 一条链接一个文件（纳秒命名），push 不需加锁故不会丢更新；pop 取最新并容忍并发删除；启动时迁移旧的 `pendingLinks` 数组。10 条测试含两个并发用例 |
 | 并发压力测试 | `Tests/TaskRegistryConcurrencyTests.swift` | 8 线程 × 300 轮注册/替换/移除，钉住 `isCurrent` 的契约（替换后必须失效、未知任务算当前），TSan 下 0 报告 |
 | 片库查询已接入真实视图 | `Sources/Views/LibraryView.swift` | `visibleRecords` 现在走 `LibraryQuery.apply(...)`，性能测试覆盖的就是真实路径 |
 | 性能基线 | `Tests/PerformanceTests.swift` | PERF-02（500 项搜索 ~0.6ms / 过滤+排序 ~1.3ms）、PERF-06（500 条索引存取 ~3.4ms） |
@@ -584,4 +585,8 @@ ID:            BUG-<递增>
 | 查询逻辑可测化 | `Sources/Core/LibraryQuery.swift` | 把片库过滤/排序从视图里抽成纯函数（UI 侧可后续改用它，行为已对齐） |
 | 夜间消毒器 CI | `.github/workflows/sanitizers.yml` | 每晚 TSan + ASan 跑全部单元测试，另有 Swift 6 严格并发编译（非阻塞） |
 
-**实测结果（本机 iPhone 18 Pro Max 模拟器）**：单元测试 **149 条全绿**；TSan 下 149 条全绿、**0 数据竞争报告**；ASan 任务已配置在 CI（每周一、四 18:00 UTC 跑，避免 macOS runner 10 倍额度烧穿私有仓库配额）。
+**实测结果**：
+- 本机（iPhone 18 Pro / Pro Max 模拟器）：单元测试全绿；TSan 下 **0 数据竞争报告**；启动性能与 3 项热点性能已记录基线。
+- GitHub Actions（仓库已公开，[`CI`](https://github.com/pwy19831104/fluxkit/actions)）：在 `612feeb` 上 **单元测试 + UI 测试 + Release 编译 + 站点构建全部通过**。
+- StoreKit 交互式购买测试在 CI 上会**跳过**（GitHub runner 无可用 StoreKit 测试服务，实测 `purchase()` 永不返回）；确定性契约测试（ID/价格/周期/同组/未知 ID）在所有环境都跑。购买/恢复/退款/取消由沙盒手工用例覆盖。
+- 消毒器任务（TSan/ASan）每周一、四 18:00 UTC 跑。
