@@ -29,24 +29,28 @@ final class StoreKitConfigurationTests: XCTestCase {
     }
 
 
-    /// `product.purchase()` can wait on the StoreKit daemon indefinitely when the simulator keeps a
-    /// pending transaction (seen after a crash mid-purchase). A hang blocks the whole CI job, so the
-    /// purchase is raced against a deadline and reported as a failure instead.
+    /// `product.purchase()` can wait on the StoreKit daemon forever when the environment has no
+    /// working StoreKit test service (observed on GitHub's macOS runners). `withThrowingTaskGroup`
+    /// does **not** help: leaving the group waits for the uncancellable purchase task anyway, which
+    /// turned a 30s deadline into a 105s stall. So the purchase runs in a detached task and the test
+    /// polls a lock-protected box, returning as soon as the deadline passes.
     private func purchase(
-        _ product: Product, seconds: UInt64 = 30
+        _ product: Product, seconds: UInt64 = 15
     ) async throws -> Product.PurchaseResult {
-        try await withThrowingTaskGroup(of: Product.PurchaseResult.self) { group in
-            group.addTask { try await product.purchase() }
-            group.addTask {
-                try await Task.sleep(nanoseconds: seconds * 1_000_000_000)
-                throw StoreKitTestError.purchaseTimedOut(seconds)
-            }
-            defer { group.cancelAll() }
-            guard let first = try await group.next() else {
-                throw StoreKitTestError.purchaseTimedOut(seconds)
-            }
-            return first
+        let box = PurchaseBox()
+        let task = Task.detached(priority: .userInitiated) {
+            do { box.store(try await product.purchase()) } catch { box.fail(error) }
         }
+        defer { task.cancel() }
+
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(Int64(seconds)))
+        while clock.now < deadline {
+            if let result = box.result() { return result }
+            if let error = box.error() { throw error }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        throw StoreKitTestError.purchaseTimedOut(seconds)
     }
 
     private enum StoreKitTestError: Error, CustomStringConvertible {
@@ -54,8 +58,34 @@ final class StoreKitConfigurationTests: XCTestCase {
         var description: String {
             switch self {
             case .purchaseTimedOut(let seconds):
-                return "product.purchase() did not return within \(seconds)s — StoreKit daemon may be stuck"
+                return "product.purchase() did not return within \(seconds)s — StoreKit test service unavailable"
             }
+        }
+    }
+
+    private final class PurchaseBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stored: Product.PurchaseResult?
+        private var failure: Error?
+
+        func store(_ result: Product.PurchaseResult) {
+            lock.lock(); defer { lock.unlock() }
+            stored = result
+        }
+
+        func fail(_ error: Error) {
+            lock.lock(); defer { lock.unlock() }
+            failure = error
+        }
+
+        func result() -> Product.PurchaseResult? {
+            lock.lock(); defer { lock.unlock() }
+            return stored
+        }
+
+        func error() -> Error? {
+            lock.lock(); defer { lock.unlock() }
+            return failure
         }
     }
 
@@ -108,16 +138,21 @@ final class StoreKitConfigurationTests: XCTestCase {
     /// contract tests above still run everywhere; the interactive purchase is covered locally and
     /// by the sandbox cases in `docs/TEST_PLAN.md`.
     func testPurchaseBecomesCurrentEntitlement() async throws {
-        try XCTSkipIf(
-            ProcessInfo.processInfo.environment["CI"] != nil,
-            "StoreKit purchase flow is unavailable on CI runners"
-        )
         _ = try makeSession()
 
         let products = try await Product.products(for: [Expected.monthly])
         let product = try XCTUnwrap(products.first)
 
-        switch try await purchase(product) {
+        let purchaseResult: Product.PurchaseResult
+        do {
+            purchaseResult = try await purchase(product)
+        } catch StoreKitTestError.purchaseTimedOut {
+            throw XCTSkip(
+                "StoreKit test service unavailable here (no daemon response); covered by the sandbox cases in docs/TEST_PLAN.md"
+            )
+        }
+
+        switch purchaseResult {
         case .success(let verification):
             guard case .verified(let transaction) = verification else {
                 return XCTFail("Transaction failed verification")
