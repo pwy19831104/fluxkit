@@ -26,6 +26,10 @@ final class DownloadManager: NSObject {
     /// When each record last had its media address re-resolved, so a server that keeps
     /// rejecting one cannot turn into a re-resolve loop.
     private var lastSourceRefresh: [UUID: Date] = [:]
+    /// Records whose current transfer was started from resume data. If such a transfer fails
+    /// without producing new resume data, the stored data is unusable and the download has to
+    /// start over instead of being resumed into the same wall.
+    private var resumeAttempts: Set<UUID> = []
 
     /// Minimum gap between automatic re-resolves for one record.
     static let sourceRefreshCooldown: TimeInterval = 60
@@ -55,13 +59,54 @@ final class DownloadManager: NSObject {
 
     // MARK: - Public API
 
-    func start(_ media: ResolvedMedia) {
+    /// Adds a download, reusing the existing record when this address is already known.
+    ///
+    /// The same link can be pasted twice, and podcast refreshes re-add the newest episode; without
+    /// this the list filled up with identical rows. Reusing the record also means "start" doubles
+    /// as "resume" for a paused item and "retry" for a dead one.
+    ///
+    /// - Returns: the record that represents this media, or `nil` when nothing had to be done.
+    @discardableResult
+    func start(_ media: ResolvedMedia) -> DownloadRecord? {
+        if let existing = library.records.first(where: { $0.remoteURL == media.url || $0.sourceURL == media.url }) {
+            switch existing.state {
+            case .running, .queued:
+                #if DEBUG
+                NSLog("DownloadManager: already queued, ignoring duplicate")
+                #endif
+                return existing
+            case .paused:
+                resume(existing)
+                return existing
+            case .failed, .cancelled:
+                retry(existing)
+                return existing
+            case .finished:
+                // Only a missing file makes a second download meaningful.
+                if library.fileURL(for: existing) != nil {
+                    #if DEBUG
+                    NSLog("DownloadManager: already downloaded, ignoring duplicate")
+                    #endif
+                    return existing
+                }
+            }
+        }
         let record = DownloadRecord(media: media)
         library.upsert(record)
         enqueue(record.id)
+        return record
     }
 
     func retry(_ record: DownloadRecord) {
+        // Imported files have no remote address; "retry" cannot resurrect them.
+        guard record.isImported != true else {
+            library.update(record.id) { item in
+                item.errorMessage = L("Imported files can't be downloaded again. Pick the file once more.",
+                                      "导入的文件无法重新下载，请重新导入一次。")
+            }
+            return
+        }
+        resumeAttempts.remove(record.id)
         discardResumeData(recordID: record.id)
         AppPaths.removeHLSWork(recordID: record.id)
         // An explicit retry is a fresh start, so it may re-resolve the page immediately.
@@ -96,6 +141,12 @@ final class DownloadManager: NSObject {
     }
 
     func pause(_ recordID: UUID) {
+        pause(recordID, reason: nil)
+    }
+
+    /// - Parameter reason: shown after the pause lands; used by the Wi-Fi-only policy so the row
+    ///   does not just say "paused" out of nowhere.
+    private func pause(_ recordID: UUID, reason: String?) {
         pending.removeAll { $0 == recordID }
 
         if let task = activeTasks[recordID] as? URLSessionDownloadTask {
@@ -112,9 +163,16 @@ final class DownloadManager: NSObject {
                 Task { @MainActor in
                     self.activeTasks[recordID] = nil
                     self.library.update(recordID) { record in
+                        guard let reason else {
+                            record.errorMessage = resumeData == nil
+                                ? L("Paused. Tap resume to start over.", "已暂停。点继续重新下载。")
+                                : L("Paused. Tap resume to continue.", "已暂停。点继续接着下载。")
+                            return
+                        }
                         record.errorMessage = resumeData == nil
-                            ? L("Paused. Tap resume to start over.", "已暂停。点继续重新下载。")
-                            : L("Paused. Tap resume to continue.", "已暂停。点继续接着下载。")
+                            ? reason
+                            : "\(reason) " + L("Tap resume when you're back on Wi-Fi.",
+                                                "回到 Wi-Fi 后点继续。")
                     }
                     self.pump()
                 }
@@ -127,7 +185,8 @@ final class DownloadManager: NSObject {
         if let task = hlsTasks[recordID] {
             library.update(recordID) { record in
                 record.state = .paused
-                record.errorMessage = L("Paused. Tap resume to continue.", "已暂停。点继续接着下载。")
+                record.errorMessage = reason ?? L("Paused. Tap resume to continue.",
+                                                  "已暂停。点继续接着下载。")
             }
             task.cancel()
             hlsTasks[recordID] = nil
@@ -147,6 +206,7 @@ final class DownloadManager: NSObject {
 
     func cancel(_ recordID: UUID) {
         pending.removeAll { $0 == recordID }
+        resumeAttempts.remove(recordID)
         discardResumeData(recordID: recordID)
         if let task = activeTasks[recordID] {
             task.cancel()
@@ -166,7 +226,23 @@ final class DownloadManager: NSObject {
 
     /// Called when the network path or the queue settings change.
     func networkChanged() {
+        // "Wi-Fi only" also has to apply to transfers that are already running: a task created
+        // from resume data keeps the original request, which allows cellular, so switching to a
+        // mobile network mid-transfer would silently eat the user's data allowance.
+        if settings.wifiOnly, !network.isOnWiFi {
+            pauseAllForWiFi()
+        }
         pump()
+    }
+
+    private func pauseAllForWiFi() {
+        let running = activeTasks.keys.filter { library.record(id: $0)?.kind == .progressive }
+        let processing = Array(hlsTasks.keys)
+        for recordID in running + processing {
+            guard let record = library.record(id: recordID), record.state == .running || record.state == .queued
+            else { continue }
+            pause(recordID, reason: L("Waiting for Wi-Fi.", "等待 Wi-Fi。"))
+        }
     }
 
     // MARK: - Queue
@@ -237,12 +313,16 @@ final class DownloadManager: NSObject {
         let resumeURL = AppPaths.resumeDataURL(recordID: record.id)
         let task: URLSessionDownloadTask
         if let data = try? Data(contentsOf: resumeURL) {
+            // A task built from resume data cannot be told to avoid cellular access, so the
+            // Wi-Fi-only policy is enforced here (and again in `networkChanged()`).
             task = session.downloadTask(withResumeData: data)
+            resumeAttempts.insert(record.id)
         } else {
             var request = URLRequest(url: media.url)
             media.httpHeaders.forEach { request.setValue($1, forHTTPHeaderField: $0) }
             request.allowsCellularAccess = !settings.wifiOnly
             task = session.downloadTask(with: request)
+            resumeAttempts.remove(record.id)
         }
         task.taskDescription = Self.taskDescription(recordID: record.id, fileExtension: media.fileExtension)
         registry.register(
@@ -305,12 +385,18 @@ final class DownloadManager: NSObject {
         activeTasks[recordID] = nil
         pending.removeAll { $0 == recordID }
         lastSourceRefresh[recordID] = nil
+        resumeAttempts.remove(recordID)
         discardResumeData(recordID: recordID)
         AppPaths.removeHLSWork(recordID: recordID)
 
         // Files.app shows this name, so use the human title instead of the UUID.
         let title = library.record(id: recordID)?.title ?? L("Video", "视频")
-        let finalName = FileNames.adopt(fileName: fileName, title: title, recordID: recordID)
+        let finalName = FileNames.adopt(
+            fileName: fileName,
+            title: title,
+            referenced: library.referencedMediaFileNames,
+            recordID: recordID
+        )
 
         library.update(recordID) { record in
             record.state = .finished
@@ -330,7 +416,11 @@ final class DownloadManager: NSObject {
         hlsTasks[recordID] = nil
         activeTasks[recordID] = nil
         pending.removeAll { $0 == recordID }
+        resumeAttempts.remove(recordID)
         cleanTemporaryFiles(recordID: recordID)
+        // A failed HLS job can leave hundreds of megabytes of .seg files behind; the segments are
+        // only useful for resuming, and a failed record is not going to resume.
+        AppPaths.removeHLSWork(recordID: recordID)
         let text = message ?? L("Download failed.", "下载失败。")
         library.update(recordID) { record in
             if record.state != .cancelled && record.state != .paused {
@@ -348,6 +438,7 @@ final class DownloadManager: NSObject {
         hlsTasks[recordID] = nil
         activeTasks[recordID] = nil
         pending.removeAll { $0 == recordID }
+        resumeAttempts.remove(recordID)
         cleanTemporaryFiles(recordID: recordID)
         library.update(recordID) { record in
             guard record.state != .paused else { return }
@@ -438,6 +529,20 @@ final class DownloadManager: NSObject {
         return true
     }
 
+    /// Drops the progress and queues the record again from byte zero. Used when the stored resume
+    /// data no longer matches the file on the server (the transfer would otherwise fail forever).
+    private func restartFromScratch(recordID: UUID) {
+        resumeAttempts.remove(recordID)
+        discardResumeData(recordID: recordID)
+        library.update(recordID) { record in
+            guard record.state != .cancelled, record.state != .paused else { return }
+            record.state = .queued
+            record.bytesReceived = 0
+            record.errorMessage = L("Restarting from the beginning…", "正在从头重新下载…")
+        }
+        enqueue(recordID)
+    }
+
     /// A response the server refused. The body it came with is an error page, never the video,
     /// so it is thrown away instead of being saved as if the download had succeeded.
     private func handleRejectedResponse(recordID: UUID, status: Int) async {
@@ -467,6 +572,24 @@ final class DownloadManager: NSObject {
     nonisolated private static var expiredLinkMessage: String {
         L("The site's playback link had expired and a new one couldn't be fetched. Paste the page link again to refresh it.",
           "网站的播放地址已过期，暂时没能换到新的。重新粘贴一遍页面链接就能刷新。")
+    }
+
+    /// Errors that mean "the resume data no longer matches the file on the server" rather than a
+    /// transport problem. Offline/timeouts are deliberately absent: retrying those from scratch
+    /// would just fail again.
+    nonisolated static func shouldRestartWithoutResume(usedResumeData: Bool, error: NSError) -> Bool {
+        guard usedResumeData else { return false }
+        guard error.domain == NSURLErrorDomain else { return false }
+        switch error.code {
+        case NSURLErrorBadServerResponse,
+             NSURLErrorCannotParseResponse,
+             NSURLErrorResourceUnavailable,
+             NSURLErrorCannotDecodeContentData,
+             NSURLErrorUnsupportedURL:
+            return true
+        default:
+            return false
+        }
     }
 
     /// `NSURLErrorBadServerResponse` is how a rejected signed address surfaces when the system
@@ -500,6 +623,17 @@ final class DownloadManager: NSObject {
 
         for record in library.records where record.state == .queued && !live.contains(record.id) {
             if !pending.contains(record.id) { pending.append(record.id) }
+        }
+
+        // HLS scratch directories for records that are done (or dead) are pure disk waste; a
+        // failed 500 MB job used to leave its segments behind forever.
+        for record in library.records where record.kind == .hls {
+            switch record.state {
+            case .finished, .failed, .cancelled:
+                AppPaths.removeHLSWork(recordID: record.id)
+            case .queued, .running, .paused:
+                continue
+            }
         }
 
         for record in library.records where record.state == .running && !live.contains(record.id) {
@@ -684,9 +818,21 @@ extension DownloadManager: URLSessionDownloadDelegate {
             // The task is gone either way; holding on to it would keep the queue from
             // starting the replacement below.
             self.activeTasks[entry.recordID] = nil
+            let usedResume = self.resumeAttempts.contains(entry.recordID)
             // A lapsed signed address: re-resolve the page before deciding anything else,
             // because the resume data it came with points at the dead URL too.
             if rejected, await self.recoverFromRejectedURL(recordID: entry.recordID) { return }
+
+            // Resume data that the server will no longer honour (file replaced, range gone) has to
+            // be thrown away, otherwise every "resume" would fail the same way.
+            if resumeData == nil,
+               Self.shouldRestartWithoutResume(usedResumeData: usedResume, error: nsError) {
+                #if DEBUG
+                NSLog("Download resume rejected (\(nsError.code)); restarting from zero")
+                #endif
+                self.restartFromScratch(recordID: entry.recordID)
+                return
+            }
 
             if resumeData != nil {
                 self.markPaused(recordID: entry.recordID,
@@ -717,6 +863,13 @@ extension DownloadManager: URLSessionDownloadDelegate {
                      "无法验证服务器的安全证书。")
         case NSURLErrorUnsupportedURL:
             return L("That link can't be downloaded directly.", "这个链接无法直接下载。")
+        case NSURLErrorAppTransportSecurityRequiresSecureConnection:
+            // ATS refused a plaintext address that has no TLS twin.
+            #if DEBUG
+            NSLog("Download blocked by ATS (http-only host)")
+            #endif
+            return L("That site only offers an unencrypted (http) address, which iOS blocks. Try the site's https link.",
+                     "这个站点只提供不加密的 http 地址，iOS 会拦截。试试它的 https 链接。")
         default:
             #if DEBUG
             NSLog("Download failed: \(error.domain) \(error.code) \(error.localizedDescription)")

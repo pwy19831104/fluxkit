@@ -9,7 +9,17 @@ final class LibraryStore {
     static let shared = LibraryStore()
 
     private(set) var records: [DownloadRecord] = []
+    /// Set when the index on disk could not be used, so Settings can say so instead of the app
+    /// silently looking "empty".
+    private(set) var persistenceWarning: String?
+    private var canSave = true
+    /// Debounce for structural changes, and the floor between two writes while progress callbacks
+    /// keep arriving (a download reports several times per second).
+    private static let saveDebounce: UInt64 = 400_000_000
+    private static let saveInterval: UInt64 = 2_000_000_000
+
     private var saveTask: Task<Void, Never>?
+    private var needsSave = false
 
     private init() {
         load()
@@ -32,6 +42,11 @@ final class LibraryStore {
 
     var totalBytes: Int64 {
         records.filter { $0.state == .finished }.reduce(0) { $0 + $1.bytesReceived }
+    }
+
+    /// Media file names that records point at. Used to tell a real download from a leftover.
+    var referencedMediaFileNames: Set<String> {
+        Set(records.compactMap { $0.fileName })
     }
 
     func record(id: UUID) -> DownloadRecord? {
@@ -61,8 +76,8 @@ final class LibraryStore {
         scheduleSave()
     }
 
-    /// Mutates a record in place. Progress updates arrive many times per second, so the
-    /// caller may pass `persist: false` and rely on the debounced save.
+    /// Mutates a record in place. Progress updates arrive many times per second, which is why
+    /// saving is debounced in `scheduleSave()`.
     func update(_ id: UUID, _ mutate: (inout DownloadRecord) -> Void) {
         guard let index = records.firstIndex(where: { $0.id == id }) else { return }
         mutate(&records[index])
@@ -87,26 +102,37 @@ final class LibraryStore {
     // MARK: - Persistence
 
     private func load() {
-        guard let data = try? Data(contentsOf: AppPaths.stateFile) else { return }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        records = (try? decoder.decode([DownloadRecord].self, from: data)) ?? []
+        let result = PersistedIndex.load(DownloadRecord.self,
+                                         from: AppPaths.stateFile,
+                                         label: L("library", "片库"))
+        records = result.items
+        persistenceWarning = result.warning
+        canSave = result.canSave
+        if let warning = result.warning { NSLog("LibraryStore: \(warning)") }
     }
 
+    /// Coalesces bursts into a single loop: it used to cancel and recreate a `Task` on every
+    /// progress callback (several per second) and write the whole index each time.
     private func scheduleSave() {
-        saveTask?.cancel()
+        needsSave = true
+        guard saveTask == nil else { return }
         saveTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            guard !Task.isCancelled else { return }
-            self?.saveNow()
+            while true {
+                try? await Task.sleep(nanoseconds: Self.saveDebounce)
+                guard let self, self.needsSave else { break }
+                self.needsSave = false
+                self.saveNow()
+                // Keep a floor between writes while callbacks keep coming.
+                try? await Task.sleep(nanoseconds: Self.saveInterval)
+            }
+            self?.saveTask = nil
         }
     }
 
     func saveNow() {
-        let snapshot = records
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(snapshot) else { return }
-        try? data.write(to: AppPaths.stateFile, options: .atomic)
+        needsSave = false
+        // Never overwrite an index this build could not read (newer schema / unreadable file).
+        guard canSave else { return }
+        PersistedIndex.save(records, to: AppPaths.stateFile)
     }
 }

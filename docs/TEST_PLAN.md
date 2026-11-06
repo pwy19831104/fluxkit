@@ -578,6 +578,7 @@ ID:            BUG-<递增>
 | StoreKit 本地配置 | `Configuration.storekit` | 与 ASC/RevenueCat 一致的两个订阅商品（`cloud.fluxkit.pro.monthly` / `.yearly`）、同一订阅组、en_US + zh_CN 本地化；已挂到 `FluxKit` scheme（`storeKitConfiguration`） |
 | 商品契约测试 | `Tests/StoreKitConfigurationTests.swift` | 4 条：ID 与配置一致、价格/周期/订阅组正确、购买后成为 current entitlement、未知 ID 不被解析（到期/升级两条因测试会话行为不稳定，改由 PRO-05..08 手工沙盒覆盖，原因写在测试文件注释里） |
 | App Group 收件箱 | `Shared/LinkInbox.swift` + `Tests/LinkInboxTests.swift` | 一条链接一个文件（纳秒命名），push 不需加锁故不会丢更新；pop 取最新并容忍并发删除；启动时迁移旧的 `pendingLinks` 数组。10 条测试含两个并发用例 |
+| 媒体目录一致性 | `Sources/Services/MediaSweep.swift` + `Tests/MediaSweepTests.swift` | 启动时回收无人引用的媒体文件（24h 年龄门槛、跳过 UUID 中间文件与字幕旁挂）；`FileNames.adopt` 复用无人引用的同名文件，避免 `(2)` 副本与孤儿 |
 | 并发压力测试 | `Tests/TaskRegistryConcurrencyTests.swift` | 8 线程 × 300 轮注册/替换/移除，钉住 `isCurrent` 的契约（替换后必须失效、未知任务算当前），TSan 下 0 报告 |
 | 片库查询已接入真实视图 | `Sources/Views/LibraryView.swift` | `visibleRecords` 现在走 `LibraryQuery.apply(...)`，性能测试覆盖的就是真实路径 |
 | 性能基线 | `Tests/PerformanceTests.swift` | PERF-02（500 项搜索 ~0.6ms / 过滤+排序 ~1.3ms）、PERF-06（500 条索引存取 ~3.4ms） |
